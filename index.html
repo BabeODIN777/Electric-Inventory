@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management System - OCR Invoice Processing</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-boxes"></i> ប្រព័ន្ធគ្រប់គ្រងស្តុកទំនិញ + OCR</h1>
+            <h2 id="company-name-display">ក្រុមហ៊ុនរបស់អ្នក</h2>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="add-item">
+                <i class="fas fa-plus-circle"></i> បន្ថែមទំនិញ
+            </button>
+            <button class="tab-btn" data-tab="ocr-invoice">
+                <i class="fas fa-file-invoice"></i> OCR វិក័យប័ត្រ
+            </button>
+            <button class="tab-btn" data-tab="inventory">
+                <i class="fas fa-box-open"></i> ស្តុកទំនិញ
+            </button>
+            <button class="tab-btn" data-tab="settings">
+                <i class="fas fa-cog"></i> ការកំណត់
+            </button>
+        </nav>
+
+        <main class="tab-content">
+            <!-- Add Item Tab -->
+            <section id="add-item" class="tab-pane active">
+                <h2><i class="fas fa-plus"></i> បន្ថែមទំនិញថ្មី</h2>
+                <form id="add-item-form">
+                    <div class="form-group">
+                        <label for="item-company"><i class="fas fa-building"></i> ឈ្មោះក្រុមហ៊ុន:</label>
+                        <select id="item-company" required>
+                            <option value="">-- ជ្រើសរើសក្រុមហ៊ុន --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-name"><i class="fas fa-tag"></i> ឈ្មោះទំនិញ:</label>
+                        <input type="text" id="item-name" placeholder="បញ្ចូលឈ្មោះទំនិញ..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-quantity"><i class="fas fa-sort-amount-up"></i> ចំនួន:</label>
+                        <input type="number" id="item-quantity" placeholder="0" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-price"><i class="fas fa-dollar-sign"></i> តម្លៃ:</label>
+                        <input type="number" id="item-price" placeholder="0" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="item-date"><i class="fas fa-calendar-alt"></i> កាលបរិច្ឆេទ:</label>
+                        <input type="date" id="item-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="item-category"><i class="fas fa-tags"></i> ប្រភេទទំនិញ:</label>
+                        <input type="text" id="item-category" placeholder="ឧ. គ្រឿងអគ្គិសនី, គ្រឿងសំអាង...">
+                    </div>
+                    <div class="form-group">
+                        <label for="item-notes"><i class="fas fa-sticky-note"></i> កំណត់ចំណាំ:</label>
+                        <textarea id="item-notes" placeholder="កំណត់ចំណាំបន្ថែម..." rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> រក្សាទុកទំនិញ
+                    </button>
+                    <button type="button" id="reset-form" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> សម្អាត
+                    </button>
+                </form>
+                <div class="recent-added">
+                    <h3>ទំនិញដែលបានបន្ថែមថ្មីៗ</h3>
+                    <div id="recent-items"></div>
+                </div>
+            </section>
+
+            <!-- OCR Invoice Processing Tab -->
+            <section id="ocr-invoice" class="tab-pane">
+                <h2><i class="fas fa-file-invoice"></i> ប្រើប្រាស់ OCR សម្រាប់វិក័យប័ត្រ</h2>
+                
+                <div class="ocr-container">
+                    <div class="ocr-step active">
+                        <h3><i class="fas fa-upload"></i> ជំហានទី ១: ផ្ទុករូបភាពវិក័យប័ត្រ</h3>
+                        <div class="upload-area" id="drop-area">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>ទាញដាក់រូបភាពវិក័យប័ត្រនៅទីនេះ</p>
+                            <p class="upload-hint">ឬ</p>
+                            <input type="file" id="invoice-upload" accept="image/*,.pdf,.jpg,.jpeg,.png,.webp">
+                            <label for="invoice-upload" class="btn btn-primary">
+                                <i class="fas fa-folder-open"></i> ជ្រើសរើសឯកសារ
+                            </label>
+                            <p class="file-types">ទ្រង់ទ្រាយគាំទ្រ: JPG, PNG, PDF, WebP</p>
+                        </div>
+                        
+                        <div class="image-preview" id="image-preview">
+                            <div class="preview-placeholder">
+                                <i class="fas fa-image"></i>
+                                <p>រូបភាពនឹងបង្ហាញនៅទីនេះ</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ocr-step">
+                        <h3><i class="fas fa-cogs"></i> ជំហានទី ២: កំណត់តំបន់សម្រាប់ OCR</h3>
+                        <div class="ocr-settings">
+                            <div class="form-group">
+                                <label for="ocr-language"><i class="fas fa-language"></i> ភាសានៅលើវិក័យប័ត្រ:</label>
+                                <select id="ocr-language">
+                                    <option value="eng">អង់គ្លេស (English)</option>
+                                    <option value="khm">ខ្មែរ (Khmer)</option>
+                                    <option value="eng+khm">ទាំងពីរ (Both)</option>
+                                    <option value="chi_sim">ចិន (Chinese Simplified)</option>
+                                    <option value="fra">បារាំង (French)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="ocr-area-selector">
+                                <div class="area-controls">
+                                    <button class="btn btn-small" id="select-area-btn">
+                                        <i class="fas fa-vector-square"></i> ជ្រើសរើសតំបន់
+                                    </button>
+                                    <button class="btn btn-small btn-secondary" id="clear-area-btn">
+                                        <i class="fas fa-times"></i> លុបតំបន់
+                                    </button>
+                                    <button class="btn btn-small btn-info" id="auto-detect-btn">
+                                        <i class="fas fa-robot"></i> ស្វ័យប្រវត្តិស្វែងរក
+                                    </button>
+                                </div>
+                                <div class="area-info">
+                                    <p>ប្រើម៉ៅស៍អូសដើម្បីជ្រើសរើសតំបន់ដែលមានទិន្នន័យទំនិញ</p>
+                                    <div id="selected-areas"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="preview-controls">
+                                <button class="btn btn-primary" id="preview-ocr-btn">
+                                    <i class="fas fa-eye"></i> មើលលទ្ធផល OCR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ocr-step">
+                        <h3><i class="fas fa-check-circle"></i> ជំហានទី ៣: ត្រួតពិនិត្យ និងបញ្ជូនទិន្នន័យ</h3>
+                        <div class="ocr-results">
+                            <div class="results-container">
+                                <div class="extracted-text">
+                                    <h4><i class="fas fa-font"></i> អត្ថបទដែលបានស្រាវជ្រាវ:</h4>
+                                    <div id="ocr-output"></div>
+                                </div>
+                                <div class="parsed-items">
+                                    <h4><i class="fas fa-list"></i> ទំនិញដែលបានស្វែងរក:</h4>
+                                    <div id="parsed-items-list"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="ocr-actions">
+                                <div class="form-group">
+                                    <label for="target-company"><i class="fas fa-building"></i> ក្រុមហ៊ុនគោលដៅ:</label>
+                                    <select id="target-company">
+                                        <option value="">-- ជ្រើសរើសក្រុមហ៊ុន --</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="action-buttons">
+                                    <button class="btn btn-success" id="add-all-items-btn">
+                                        <i class="fas fa-database"></i> បន្ថែមទាំងអស់ទៅស្តុក
+                                    </button>
+                                    <button class="btn btn-info" id="export-invoice-excel-btn">
+                                        <i class="fas fa-file-excel"></i> នាំចេញទៅ Excel
+                                    </button>
+                                    <button class="btn btn-secondary" id="clear-ocr-btn">
+                                        <i class="fas fa-redo"></i> ចាប់ផ្ដើមឡើងវិញ
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="ocr-status">
+                    <h4><i class="fas fa-chart-line"></i> ស្ថានភាព OCR</h4>
+                    <div class="status-container">
+                        <div class="progress-container">
+                            <div class="progress-bar" id="ocr-progress-bar"></div>
+                            <div class="progress-text" id="ocr-progress-text">រង់ចាំការផ្ទុករូបភាព...</div>
+                        </div>
+                        <div class="stats">
+                            <div class="stat">
+                                <span class="stat-label">រូបភាព:</span>
+                                <span class="stat-value" id="image-stats">មិនទាន់មាន</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">ពាក្យដែលបានស្វែងរក:</span>
+                                <span class="stat-value" id="words-stats">0</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">ទំនិញដែលបានស្វែងរក:</span>
+                                <span class="stat-value" id="items-stats">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory Tab -->
+            <section id="inventory" class="tab-pane">
+                <div class="inventory-header">
+                    <h2><i class="fas fa-boxes"></i> ស្តុកទំនិញ</h2>
+                    <div class="inventory-stats">
+                        <div class="stat-card">
+                            <h3>សរុបទំនិញ</h3>
+                            <p id="total-items">0</p>
+                        </div>
+                        <div class="stat-card out-of-stock">
+                            <h3>អស់ស្តុក</h3>
+                            <p id="out-of-stock">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>ក្រុមហ៊ុន</h3>
+                            <p id="total-companies">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>តម្លៃសរុប</h3>
+                            <p id="total-value">$0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-controls">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label for="filter-company"><i class="fas fa-building"></i> ត្រងតាមក្រុមហ៊ុន:</label>
+                            <select id="filter-company" class="filter-select">
+                                <option value="all">ទាំងអស់</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-category"><i class="fas fa-tags"></i> ត្រងតាមប្រភេទ:</label>
+                            <select id="filter-category" class="filter-select">
+                                <option value="all">ទាំងអស់</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-stock"><i class="fas fa-box"></i> ស្ថានភាពស្តុក:</label>
+                            <select id="filter-stock" class="filter-select">
+                                <option value="all">ទាំងអស់</option>
+                                <option value="in-stock">មានស្តុក</option>
+                                <option value="out-of-stock">អស់ស្តុក</option>
+                                <option value="low-stock">ស្តុកទាប</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label for="sort-by"><i class="fas fa-sort"></i> រៀបតាម:</label>
+                            <select id="sort-by" class="filter-select">
+                                <option value="date-desc">កាលបរិច្ឆេទ (ថ្មីទៅចាស់)</option>
+                                <option value="date-asc">កាលបរិច្ឆេទ (ចាស់ទៅថ្មី)</option>
+                                <option value="name-asc">ឈ្មោះ (ក-ឡ)</option>
+                                <option value="name-desc">ឈ្មោះ (ឡ-ក)</option>
+                                <option value="quantity-asc">ចំនួន (តិចទៅច្រើន)</option>
+                                <option value="quantity-desc">ចំនួន (ច្រើនទៅតិច)</option>
+                                <option value="price-asc">តម្លៃ (តិចទៅច្រើន)</option>
+                                <option value="price-desc">តម្លៃ (ច្រើនទៅតិច)</option>
+                                <option value="company-asc">ក្រុមហ៊ុន (ក-ឡ)</option>
+                                <option value="company-desc">ក្រុមហ៊ុន (ឡ-ក)</option>
+                            </select>
+                        </div>
+                        <div class="filter-group search-group">
+                            <label for="search-items"><i class="fas fa-search"></i> ស្វែងរក:</label>
+                            <input type="text" id="search-items" placeholder="ស្វែងរកទំនិញ, ក្រុមហ៊ុន, ប្រភេទ...">
+                            <button id="clear-filters" class="btn btn-secondary btn-small">
+                                <i class="fas fa-times"></i> សម្អាត
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inventory-controls">
+                    <div class="button-group">
+                        <button id="export-excel" class="btn btn-success">
+                            <i class="fas fa-file-excel"></i> នាំចេញ Excel
+                        </button>
+                        <button id="print-inventory" class="btn btn-info">
+                            <i class="fas fa-print"></i> បោះពុម្ព
+                        </button>
+                        <button id="import-csv" class="btn btn-warning">
+                            <i class="fas fa-file-import"></i> នាំចូល CSV/Excel
+                        </button>
+                        <button id="delete-all" class="btn btn-danger">
+                            <i class="fas fa-trash-alt"></i> លុបទាំងអស់
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table id="inventory-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="company">ក្រុមហ៊ុន <i class="fas fa-sort"></i></th>
+                                <th data-sort="name">ទំនិញ <i class="fas fa-sort"></i></th>
+                                <th data-sort="category">ប្រភេទ <i class="fas fa-sort"></i></th>
+                                <th data-sort="quantity">ចំនួន <i class="fas fa-sort"></i></th>
+                                <th data-sort="price">តម្លៃ <i class="fas fa-sort"></i></th>
+                                <th data-sort="date">កាលបរិច្ឆេទ <i class="fas fa-sort"></i></th>
+                                <th>សកម្មភាព</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-list"></tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="summary-info">
+                                        <span>បានបង្ហាញ <span id="showing-count">0</span> នៃ <span id="total-count">0</span> ទំនិញ</span>
+                                        <span class="company-summary" id="company-summary"></span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <div id="pagination-controls" class="pagination-controls"></div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="settings" class="tab-pane">
+                <h2><i class="fas fa-cog"></i> ការកំណត់ប្រព័ន្ធ</h2>
+                
+                <div class="settings-tabs">
+                    <button class="settings-tab-btn active" data-settings="company">ក្រុមហ៊ុន</button>
+                    <button class="settings-tab-btn" data-settings="ocr">ការកំណត់ OCR</button>
+                    <button class="settings-tab-btn" data-settings="data">គ្រប់គ្រងទិន្នន័យ</button>
+                    <button class="settings-tab-btn" data-settings="performance">ប្រតិបត្តិការ</button>
+                </div>
+                
+                <div class="settings-content">
+                    <!-- Company Settings -->
+                    <div id="company-settings" class="settings-pane active">
+                        <div class="settings-section">
+                            <h3><i class="fas fa-building"></i> ព័ត៌មានក្រុមហ៊ុនសំខាន់</h3>
+                            <form id="main-company-form">
+                                <div class="form-group">
+                                    <label for="main-company-name">ឈ្មោះក្រុមហ៊ុន:</label>
+                                    <input type="text" id="main-company-name" placeholder="ឈ្មោះក្រុមហ៊ុន..." required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="main-company-address">អាសយដ្ឋាន:</label>
+                                    <textarea id="main-company-address" placeholder="អាសយដ្ឋាន..." rows="2"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="main-company-phone">លេខទូរស័ព្ទ:</label>
+                                    <input type="tel" id="main-company-phone" placeholder="លេខទូរស័ព្ទ...">
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> រក្សាទុក
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3><i class="fas fa-list"></i> គ្រប់គ្រងបញ្ជីក្រុមហ៊ុន</h3>
+                            <div class="company-management">
+                                <div class="company-controls">
+                                    <input type="text" id="search-companies" placeholder="ស្វែងរកក្រុមហ៊ុន...">
+                                    <button id="add-new-company" class="btn btn-success">
+                                        <i class="fas fa-plus"></i> បន្ថែមក្រុមហ៊ុន
+                                    </button>
+                                </div>
+                                <div id="company-list-container">
+                                    <!-- Companies loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OCR Settings -->
+                    <div id="ocr-settings" class="settings-pane">
+                        <div class="settings-section">
+                            <h3><i class="fas fa-file-invoice"></i> ការកំណត់ OCR</h3>
+                            <form id="ocr-settings-form">
+                                <div class="form-group">
+                                    <label for="default-ocr-language">ភាសាលំនាំដើម:</label>
+                                    <select id="default-ocr-language">
+                                        <option value="eng">អង់គ្លេស</option>
+                                        <option value="khm" selected>ខ្មែរ</option>
+                                        <option value="eng+khm">ទាំងពីរ</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="ocr-confidence">កម្រិតភាពជឿជាក់អប្បបរមា (%):</label>
+                                    <input type="range" id="ocr-confidence" min="50" max="100" value="70">
+                                    <span id="confidence-value">70%</span>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="auto-detect-items">ស្វ័យប្រវត្តិស្វែងរកទំនិញ:</label>
+                                    <input type="checkbox" id="auto-detect-items" checked>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="price-patterns">លំនាំតម្លៃ (Regex):</label>
+                                    <textarea id="price-patterns" rows="3" placeholder="USD\s*(\d+\.?\d*)|\$\s*(\d+\.?\d*)">USD\s*(\d+\.?\d*)|\$\s*(\d+\.?\d*)|៛\s*(\d+\.?\d*)</textarea>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="quantity-patterns">លំនាំចំនួន:</label>
+                                    <textarea id="quantity-patterns" rows="2" placeholder="QTY\s*(\d+)|Quantity\s*(\d+)">QTY\s*(\d+)|Quantity\s*(\d+)|ចំនួន\s*(\d+)|បរិមាណ\s*(\d+)</textarea>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> រក្សាទុកការកំណត់
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Data Management -->
+                    <div id="data-settings" class="settings-pane">
+                        <div class="settings-section">
+                            <h3><i class="fas fa-database"></i> គ្រប់គ្រង និងបម្រុងទុកទិន្នន័យ</h3>
+                            
+                            <div class="data-stats">
+                                <div class="stat-card">
+                                    <h4>សរុបទំនិញ</h4>
+                                    <p id="data-total-items">0</p>
+                                </div>
+                                <div class="stat-card">
+                                    <h4>ទំហំទិន្នន័យ</h4>
+                                    <p id="data-size">0 KB</p>
+                                </div>
+                                <div class="stat-card">
+                                    <h4>ក្រុមហ៊ុន</h4>
+                                    <p id="data-total-companies">0</p>
+                                </div>
+                            </div>
+                            
+                            <div class="data-actions">
+                                <h4>សកម្មភាពទិន្នន័យ:</h4>
+                                <div class="action-buttons">
+                                    <button class="btn btn-success" id="backup-data-btn">
+                                        <i class="fas fa-download"></i> បម្រុងទុកទិន្នន័យ
+                                    </button>
+                                    <button class="btn btn-warning" id="restore-data-btn">
+                                        <i class="fas fa-upload"></i> ស្ដារទិន្នន័យ
+                                    </button>
+                                    <button class="btn btn-info" id="optimize-data-btn">
+                                        <i class="fas fa-compress"></i> បង្កើនល្បឿនទិន្នន័យ
+                                    </button>
+                                    <button class="btn btn-danger" id="clear-data-btn">
+                                        <i class="fas fa-trash"></i> លុបទិន្នន័យចាស់ៗ
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="data-import-export">
+                                <h4>នាំចូល/នាំចេញ:</h4>
+                                <div class="import-export-options">
+                                    <div class="option">
+                                        <label>នាំចេញទិន្នន័យ:</label>
+                                        <button class="btn btn-small btn-success" id="export-json-btn">JSON</button>
+                                        <button class="btn btn-small btn-info" id="export-csv-btn">CSV</button>
+                                        <button class="btn btn-small btn-primary" id="export-excel-btn">Excel</button>
+                                    </div>
+                                    <div class="option">
+                                        <label>នាំចូលទិន្នន័យ:</label>
+                                        <input type="file" id="import-file" accept=".json,.csv,.xlsx,.xls" style="display: none;">
+                                        <button class="btn btn-small btn-warning" onclick="document.getElementById('import-file').click()">
+                                            <i class="fas fa-file-import"></i> ជ្រើសរើសឯកសារ
+                                        </button>
+                                        <button class="btn btn-small btn-primary" id="import-data-btn">
+                                            <i class="fas fa-upload"></i> ផ្ទុកទិន្នន័យ
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Settings -->
+                    <div id="performance-settings" class="settings-pane">
+                        <div class="settings-section">
+                            <h3><i class="fas fa-tachometer-alt"></i> ការកំណត់ប្រតិបត្តិការ</h3>
+                            <form id="performance-form">
+                                <div class="form-group">
+                                    <label for="items-per-page">ទំនិញក្នុងមួយទំព័រ:</label>
+                                    <input type="number" id="items-per-page" min="10" max="500" value="50">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="performance-mode">របៀបប្រតិបត្តិការ:</label>
+                                    <select id="performance-mode">
+                                        <option value="normal">ធម្មតា (&lt; 1000 ទំនិញ)</option>
+                                        <option value="fast">លឿន (1000-5000 ទំនិញ)</option>
+                                        <option value="ultra">លឿនខ្លាំង (&gt; 5000 ទំនិញ)</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="auto-optimize">បង្កើនល្បឿនដោយស្វ័យប្រវត្តិ:</label>
+                                    <input type="checkbox" id="auto-optimize" checked>
+                                    <small>បង្កើនល្បឿនទិន្នន័យរាល់ 1000 ទំនិញ</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="cache-data">ឃ្លាំងសម្ងាត់ទិន្នន័យ:</label>
+                                    <input type="checkbox" id="cache-data" checked>
+                                    <small>រក្សាទុកទិន្នន័យក្នុងឃ្លាំងសម្ងាត់សម្រាប់ល្បឿន</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="batch-size">ទំហំក្រុមប្រតិបត្តិការ:</label>
+                                    <input type="number" id="batch-size" min="10" max="1000" value="100">
+                                    <small>ចំនួនទំនិញក្នុងមួយដំណាក់កាល</small>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> រក្សាទុកការកំណត់
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>© 2024 ប្រព័ន្ធគ្រប់គ្រងស្តុកទំនិញ + OCR | បង្កើតឡើងដោយ HTML, CSS & JavaScript</p>
+        </footer>
+    </div>
+
+    <!-- Company Modal -->
+    <div id="company-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-building"></i> <span id="modal-title">បន្ថែមក្រុមហ៊ុនថ្មី</span></h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="company-form">
+                    <div class="form-group">
+                        <label for="modal-company-name">ឈ្មោះក្រុមហ៊ុន:</label>
+                        <input type="text" id="modal-company-name" placeholder="ឈ្មោះក្រុមហ៊ុន..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-company-code">កូដក្រុមហ៊ុន:</label>
+                        <input type="text" id="modal-company-code" placeholder="កូដ (ជាជម្រើស)">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-company-contact">ឈ្មោះអ្នកទំនាក់ទំនង:</label>
+                        <input type="text" id="modal-company-contact" placeholder="ឈ្មោះអ្នកទំនាក់ទំនង...">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-company-phone">លេខទូរស័ព្ទ:</label>
+                        <input type="tel" id="modal-company-phone" placeholder="លេខទូរស័ព្ទ...">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-company-email">អ៊ីមែល:</label>
+                        <input type="email" id="modal-company-email" placeholder="អ៊ីមែល...">
+                    </div>
+                    <input type="hidden" id="modal-company-id">
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> រក្សាទុក
+                        </button>
+                        <button type="button" class="btn btn-secondary modal-close">
+                            <i class="fas fa-times"></i> បោះបង់
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Preview Modal -->
+    <div id="invoice-preview-modal" class="modal">
+        <div class="modal-content wide">
+            <div class="modal-header">
+                <h3><i class="fas fa-search"></i> មើលលទ្ធផល OCR</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-content" id="invoice-preview-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Template -->
+    <div id="print-template" style="display: none;">
+        <div id="print-content"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
