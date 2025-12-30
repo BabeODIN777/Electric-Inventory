@@ -1,3 +1,11 @@
+// ==============================================
+// MAIN APPLICATION INITIALIZATION
+// ==============================================
+
+// Global instances
+let ocrProcessor;
+let dataOptimizer;
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
     console.time('App initialization');
@@ -8,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initInventory();
     initSettings();
     initModal();
-    initSettingsTabs();  // Add this
+    initSettingsTabs();
     
     // Load data
     loadCompanies();
@@ -35,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update UI
     updateStats();
     updateAppDate();
+    updateDataStats();
     
     // Setup auto-backup
     setupAutoBackup();
@@ -51,6 +60,10 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('App fully initialized');
 });
 
+// ==============================================
+// UTILITY FUNCTIONS
+// ==============================================
+
 // Update app date
 function updateAppDate() {
     const now = new Date();
@@ -60,10 +73,62 @@ function updateAppDate() {
         day: 'numeric',
         weekday: 'long'
     };
-    document.getElementById('app-date').textContent = now.toLocaleDateString('km-KH', options);
+    const dateElement = document.getElementById('app-date');
+    if (dateElement) {
+        dateElement.textContent = now.toLocaleDateString('km-KH', options);
+    }
 }
 
-// Tab Navigation
+// Format price with currency
+function formatPrice(price, currency) {
+    const formatter = new Intl.NumberFormat('km-KH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+    
+    const formattedPrice = formatter.format(price || 0);
+    
+    switch(currency) {
+        case '$':
+            return `$${formattedPrice}`;
+        case '៛':
+            return `${formattedPrice}៛`;
+        case '€':
+            return `€${formattedPrice}`;
+        case '¥':
+            return `¥${formattedPrice}`;
+        default:
+            return `$${formattedPrice}`;
+    }
+}
+
+// Format date based on settings
+function formatDate(dateString, format) {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    
+    switch(format) {
+        case 'dd/mm/yyyy':
+            return `${day}/${month}/${year}`;
+        case 'mm/dd/yyyy':
+            return `${month}/${day}/${year}`;
+        case 'yyyy-mm-dd':
+            return `${year}-${month}-${day}`;
+        default:
+            return `${day}/${month}/${year}`;
+    }
+}
+
+// ==============================================
+// TAB NAVIGATION
+// ==============================================
+
 function initTabs() {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
@@ -78,7 +143,10 @@ function initTabs() {
             
             // Show active tab pane
             tabPanes.forEach(pane => pane.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
+            const targetPane = document.getElementById(tabId);
+            if (targetPane) {
+                targetPane.classList.add('active');
+            }
             
             // Refresh data when switching to inventory tab
             if (tabId === 'inventory') {
@@ -86,20 +154,28 @@ function initTabs() {
                 loadCompanyFilter();
                 loadCategoryFilter();
             }
+            
+            // Initialize OCR when switching to OCR tab
+            if (tabId === 'ocr-invoice' && typeof ocrProcessor !== 'undefined') {
+                ocrProcessor.loadCompanySelect();
+            }
         });
     });
 }
 
-// Initialize Modal
+// ==============================================
+// MODAL SYSTEM
+// ==============================================
+
 function initModal() {
     const modal = document.getElementById('company-modal');
     const closeButtons = document.querySelectorAll('.modal-close');
     const addCompanyBtn = document.getElementById('add-new-company');
-    const addCompanyBtn2 = document.getElementById('add-company-btn');
     
     // Open modal for adding new company
-    addCompanyBtn.addEventListener('click', () => openCompanyModal());
-    addCompanyBtn2.addEventListener('click', () => openCompanyModal());
+    if (addCompanyBtn) {
+        addCompanyBtn.addEventListener('click', () => openCompanyModal());
+    }
     
     // Close modal
     closeButtons.forEach(btn => {
@@ -118,22 +194,24 @@ function initModal() {
     });
     
     // Handle company form submission
-    document.getElementById('company-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        saveCompany();
-    });
+    const companyForm = document.getElementById('company-form');
+    if (companyForm) {
+        companyForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveCompany();
+        });
+    }
 }
 
 // Open company modal
 function openCompanyModal(companyId = null) {
     const modal = document.getElementById('company-modal');
     const title = document.getElementById('modal-title');
-    const form = document.getElementById('company-form');
     
     if (companyId) {
         // Edit mode
         const companies = JSON.parse(localStorage.getItem('companies')) || [];
-        const company = companies.find(c => c.id === companyId);
+        const company = companies.find(c => c.id === parseInt(companyId));
         
         if (company) {
             title.textContent = 'កែប្រែក្រុមហ៊ុន';
@@ -157,9 +235,14 @@ function openCompanyModal(companyId = null) {
 // Reset company form
 function resetCompanyForm() {
     const form = document.getElementById('company-form');
-    form.reset();
-    document.getElementById('modal-company-id').value = '';
-    document.getElementById('modal-title').textContent = 'បន្ថែមក្រុមហ៊ុនថ្មី';
+    if (form) {
+        form.reset();
+        document.getElementById('modal-company-id').value = '';
+        const title = document.getElementById('modal-title');
+        if (title) {
+            title.textContent = 'បន្ថែមក្រុមហ៊ុនថ្មី';
+        }
+    }
 }
 
 // Save company
@@ -173,7 +256,7 @@ function saveCompany() {
     }
     
     const company = {
-        id: companyId || Date.now(),
+        id: companyId ? parseInt(companyId) : Date.now(),
         name: companyName,
         code: document.getElementById('modal-company-code').value.trim(),
         contact: document.getElementById('modal-company-contact').value.trim(),
@@ -211,10 +294,16 @@ function saveCompany() {
     alert(companyId ? 'ក្រុមហ៊ុនត្រូវបានកែប្រែដោយជោគជ័យ!' : 'ក្រុមហ៊ុនត្រូវបានបន្ថែមដោយជោគជ័យ!');
 }
 
+// ==============================================
+// COMPANY MANAGEMENT
+// ==============================================
+
 // Load companies for select dropdown
 function loadCompanies() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
     const companyListBody = document.getElementById('company-list-body');
+    
+    if (!companyListBody) return;
     
     companyListBody.innerHTML = '';
     
@@ -270,7 +359,7 @@ function deleteCompany(companyId) {
     if (!confirm('តើអ្នកពិតជាចង់លុបក្រុមហ៊ុននេះមែនឬទេ?')) return;
     
     let companies = JSON.parse(localStorage.getItem('companies')) || [];
-    companies = companies.filter(c => c.id !== companyId);
+    companies = companies.filter(c => c.id !== parseInt(companyId));
     
     localStorage.setItem('companies', JSON.stringify(companies));
     loadCompanies();
@@ -284,6 +373,8 @@ function deleteCompany(companyId) {
 function loadCompanySelect() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
     const select = document.getElementById('item-company');
+    
+    if (!select) return;
     
     // Save current value
     const currentValue = select.value;
@@ -309,6 +400,8 @@ function loadCompanyFilter() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
     const select = document.getElementById('filter-company');
     
+    if (!select) return;
+    
     // Save current value
     const currentValue = select.value;
     
@@ -333,6 +426,8 @@ function loadCategoryFilter() {
     const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const select = document.getElementById('filter-category');
     
+    if (!select) return;
+    
     // Get unique categories
     const categories = [...new Set(inventory.map(item => item.category).filter(Boolean))];
     
@@ -355,11 +450,16 @@ function loadCategoryFilter() {
     }
 }
 
-// Add Item Tab
+// ==============================================
+// ADD ITEM TAB
+// ==============================================
+
 function initAddItem() {
     const form = document.getElementById('add-item-form');
     const resetBtn = document.getElementById('reset-form');
     const dateInput = document.getElementById('item-date');
+    
+    if (!form || !resetBtn || !dateInput) return;
     
     // Load company select
     loadCompanySelect();
@@ -420,7 +520,10 @@ function initAddItem() {
         alert('ទំនិញត្រូវបានបន្ថែមដោយជោគជ័យ!');
         
         // Switch to inventory tab
-        document.querySelector('[data-tab="inventory"]').click();
+        const inventoryTab = document.querySelector('[data-tab="inventory"]');
+        if (inventoryTab) {
+            inventoryTab.click();
+        }
     });
     
     resetBtn.addEventListener('click', () => {
@@ -429,37 +532,49 @@ function initAddItem() {
     });
 }
 
-// Inventory Management
+// ==============================================
+// INVENTORY MANAGEMENT
+// ==============================================
+
 function initInventory() {
     // Export to Excel
-    document.getElementById('export-excel').addEventListener('click', exportToExcel);
-    
-    // Export to CSV
-    document.getElementById('export-csv').addEventListener('click', exportToCSV);
+    const exportExcelBtn = document.getElementById('export-excel');
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', exportToExcel);
+    }
     
     // Print inventory
-    document.getElementById('print-inventory').addEventListener('click', printInventory);
+    const printInventoryBtn = document.getElementById('print-inventory');
+    if (printInventoryBtn) {
+        printInventoryBtn.addEventListener('click', printInventory);
+    }
     
     // Delete all items
-    document.getElementById('delete-all').addEventListener('click', () => {
-        if (confirm('តើអ្នកពិតជាចង់លុបទំនិញទាំងអស់មែនឬទេ?')) {
-            localStorage.removeItem('inventory');
-            loadInventory();
-            updateStats();
-            loadCategoryFilter();
-            alert('ទំនិញទាំងអស់ត្រូវបានលុបដោយជោគជ័យ!');
-        }
-    });
+    const deleteAllBtn = document.getElementById('delete-all');
+    if (deleteAllBtn) {
+        deleteAllBtn.addEventListener('click', () => {
+            if (confirm('តើអ្នកពិតជាចង់លុបទំនិញទាំងអស់មែនឬទេ?')) {
+                localStorage.removeItem('inventory');
+                loadInventory();
+                updateStats();
+                loadCategoryFilter();
+                alert('ទំនិញទាំងអស់ត្រូវបានលុបដោយជោគជ័យ!');
+            }
+        });
+    }
     
     // Clear filters
-    document.getElementById('clear-filters').addEventListener('click', () => {
-        document.getElementById('filter-company').value = 'all';
-        document.getElementById('filter-category').value = 'all';
-        document.getElementById('filter-stock').value = 'all';
-        document.getElementById('search-items').value = '';
-        document.getElementById('sort-by').value = 'date-desc';
-        loadInventory();
-    });
+    const clearFiltersBtn = document.getElementById('clear-filters');
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            document.getElementById('filter-company').value = 'all';
+            document.getElementById('filter-category').value = 'all';
+            document.getElementById('filter-stock').value = 'all';
+            document.getElementById('search-items').value = '';
+            document.getElementById('sort-by').value = 'date-desc';
+            loadInventory();
+        });
+    }
     
     // Initialize filters event listeners
     initFilters();
@@ -478,19 +593,23 @@ function initFilters() {
     
     // Add event listeners for filters
     [filterCompany, filterCategory, filterStock, sortBy].forEach(filter => {
-        filter.addEventListener('change', () => {
-            loadInventory();
-        });
+        if (filter) {
+            filter.addEventListener('change', () => {
+                loadInventory();
+            });
+        }
     });
     
     // Add debounced search
-    let searchTimeout;
-    searchItems.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            loadInventory();
-        }, 300);
-    });
+    if (searchItems) {
+        let searchTimeout;
+        searchItems.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadInventory();
+            }, 300);
+        });
+    }
 }
 
 // Initialize table sorting
@@ -523,12 +642,14 @@ function loadInventory() {
     const settings = JSON.parse(localStorage.getItem('settings')) || {};
     const lowStockThreshold = settings.lowStockThreshold || 5;
     
+    if (!tbody) return;
+    
     // Apply filters
-    const filterCompany = document.getElementById('filter-company').value;
-    const filterCategory = document.getElementById('filter-category').value;
-    const filterStock = document.getElementById('filter-stock').value;
-    const searchTerm = document.getElementById('search-items').value.toLowerCase();
-    const sortBy = document.getElementById('sort-by').value;
+    const filterCompany = document.getElementById('filter-company')?.value || 'all';
+    const filterCategory = document.getElementById('filter-category')?.value || 'all';
+    const filterStock = document.getElementById('filter-stock')?.value || 'all';
+    const searchTerm = document.getElementById('search-items')?.value.toLowerCase() || '';
+    const sortBy = document.getElementById('sort-by')?.value || 'date-desc';
     
     // Filter by company
     if (filterCompany !== 'all') {
@@ -669,13 +790,16 @@ function loadInventory() {
 
 // Update showing count
 function updateShowingCount(showing, total) {
-    document.getElementById('showing-count').textContent = showing;
-    document.getElementById('total-count').textContent = total;
+    const showingCount = document.getElementById('showing-count');
+    const totalCount = document.getElementById('total-count');
+    
+    if (showingCount) showingCount.textContent = showing;
+    if (totalCount) totalCount.textContent = total;
 }
 
 // Update company summary
 function updateCompanySummary() {
-    const filterCompany = document.getElementById('filter-company').value;
+    const filterCompany = document.getElementById('filter-company')?.value || 'all';
     const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const settings = JSON.parse(localStorage.getItem('settings')) || {};
     const currency = settings.currency || '$';
@@ -698,29 +822,107 @@ function updateCompanySummary() {
         summary = `${itemCount} ទំនិញ • តម្លៃសរុប: ${formatPrice(totalValue, currency)}`;
     }
     
-    document.getElementById('company-summary').textContent = summary;
-}
-
-// Format price with currency
-function formatPrice(price, currency) {
-    const formatter = new Intl.NumberFormat('km-KH', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-    
-    switch(currency) {
-        case '$':
-            return `$${formatter.format(price)}`;
-        case '៛':
-            return `${formatter.format(price)}៛`;
-        case '€':
-            return `€${formatter.format(price)}`;
-        case '¥':
-            return `¥${formatter.format(price)}`;
-        default:
-            return `$${formatter.format(price)}`;
+    const companySummary = document.getElementById('company-summary');
+    if (companySummary) {
+        companySummary.textContent = summary;
     }
 }
+
+// Delete item
+function deleteItem(itemId) {
+    if (!confirm('តើអ្នកពិតជាចង់លុបទំនិញនេះមែនឬទេ?')) return;
+    
+    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    inventory = inventory.filter(item => item.id !== itemId);
+    
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    loadInventory();
+    updateStats();
+    loadCategoryFilter();
+}
+
+// Edit item
+function editItem(itemId) {
+    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    const item = inventory.find(i => i.id === itemId);
+    
+    if (!item) return;
+    
+    // Switch to add item tab
+    const addItemTab = document.querySelector('[data-tab="add-item"]');
+    if (addItemTab) {
+        addItemTab.click();
+    }
+    
+    // Load companies first
+    loadCompanySelect();
+    
+    // Fill form with item data
+    setTimeout(() => {
+        document.getElementById('item-company').value = item.company;
+        document.getElementById('item-name').value = item.name;
+        document.getElementById('item-quantity').value = item.quantity;
+        document.getElementById('item-price').value = item.price;
+        document.getElementById('item-date').value = item.date;
+        document.getElementById('item-category').value = item.category || '';
+        document.getElementById('item-notes').value = item.notes || '';
+        
+        // Update form to edit mode
+        const form = document.getElementById('add-item-form');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        
+        // Change submit button text
+        submitBtn.innerHTML = '<i class="fas fa-edit"></i> កែប្រែទំនិញ';
+        
+        // Remove previous edit listener if exists
+        const existingHandler = form._editHandler;
+        if (existingHandler) {
+            form.removeEventListener('submit', existingHandler);
+        }
+        
+        // Add edit listener
+        function handleEditSubmit(e) {
+            e.preventDefault();
+            
+            item.company = document.getElementById('item-company').value.trim();
+            item.name = document.getElementById('item-name').value.trim();
+            item.quantity = parseInt(document.getElementById('item-quantity').value);
+            item.price = parseFloat(document.getElementById('item-price').value) || 0;
+            item.date = document.getElementById('item-date').value;
+            item.category = document.getElementById('item-category').value.trim();
+            item.notes = document.getElementById('item-notes').value.trim();
+            
+            localStorage.setItem('inventory', JSON.stringify(inventory));
+            
+            // Reset form
+            form.reset();
+            document.getElementById('item-date').value = new Date().toISOString().split('T')[0];
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> រក្សាទុកទំនិញ';
+            
+            // Remove edit listener
+            form.removeEventListener('submit', handleEditSubmit);
+            form._editHandler = null;
+            
+            loadInventory();
+            updateStats();
+            loadCategoryFilter();
+            alert('ទំនិញត្រូវបានកែប្រែដោយជោគជ័យ!');
+            
+            // Switch to inventory tab
+            const inventoryTab = document.querySelector('[data-tab="inventory"]');
+            if (inventoryTab) {
+                inventoryTab.click();
+            }
+        }
+        
+        form._editHandler = handleEditSubmit;
+        form.addEventListener('submit', handleEditSubmit);
+    }, 100);
+}
+
+// ==============================================
+// SETTINGS MANAGEMENT
+// ==============================================
 
 // Initialize Settings Tabs
 function initSettingsTabs() {
@@ -737,19 +939,32 @@ function initSettingsTabs() {
             
             // Show active tab pane
             settingsPanes.forEach(pane => pane.classList.remove('active'));
-            document.getElementById(settingsId + '-settings').classList.add('active');
+            const targetPane = document.getElementById(settingsId + '-settings');
+            if (targetPane) {
+                targetPane.classList.add('active');
+            }
         });
     });
     
-    // Initialize OCR settings form
-    initOCRSettingsForm();
+    // Initialize settings forms
+    initSettingsForms();
 }
 
-// Initialize OCR Settings Form
-function initOCRSettingsForm() {
-    const form = document.getElementById('ocr-settings-form');
-    if (form) {
-        form.addEventListener('submit', function(e) {
+// Initialize settings forms
+function initSettingsForms() {
+    // Main company form
+    const mainCompanyForm = document.getElementById('main-company-form');
+    if (mainCompanyForm) {
+        mainCompanyForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveMainCompanySettings();
+        });
+    }
+    
+    // OCR settings form
+    const ocrSettingsForm = document.getElementById('ocr-settings-form');
+    if (ocrSettingsForm) {
+        ocrSettingsForm.addEventListener('submit', function(e) {
             e.preventDefault();
             saveOCRSettings();
         });
@@ -764,6 +979,41 @@ function initOCRSettingsForm() {
             });
         }
     }
+    
+    // Performance settings form
+    const performanceForm = document.getElementById('performance-form');
+    if (performanceForm) {
+        performanceForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            savePerformanceSettings();
+        });
+    }
+    
+    // Data management buttons
+    initDataManagement();
+}
+
+// Save main company settings
+function saveMainCompanySettings() {
+    const companyName = document.getElementById('main-company-name').value.trim();
+    
+    if (!companyName) {
+        alert('សូមបញ្ចូលឈ្មោះក្រុមហ៊ុនសំខាន់!');
+        return;
+    }
+    
+    const settings = JSON.parse(localStorage.getItem('settings')) || {};
+    
+    settings.companyName = companyName;
+    settings.address = document.getElementById('main-company-address').value.trim();
+    settings.phone = document.getElementById('main-company-phone').value.trim();
+    
+    localStorage.setItem('settings', JSON.stringify(settings));
+    
+    // Update company name display
+    document.getElementById('company-name-display').textContent = companyName;
+    
+    alert('ការកំណត់ក្រុមហ៊ុនត្រូវបានរក្សាទុក!');
 }
 
 // Save OCR Settings
@@ -780,18 +1030,159 @@ function saveOCRSettings() {
     alert('ការកំណត់ OCR ត្រូវបានរក្សាទុក!');
 }
 
-// Initialize OCR System
-function initOCRSystem() {
+// Save performance settings
+function savePerformanceSettings() {
+    const settings = JSON.parse(localStorage.getItem('settings')) || {};
+    
+    settings.itemsPerPage = parseInt(document.getElementById('items-per-page').value) || 50;
+    settings.performanceMode = document.getElementById('performance-mode').value;
+    settings.autoOptimize = document.getElementById('auto-optimize').checked;
+    settings.cacheData = document.getElementById('cache-data').checked;
+    settings.batchSize = parseInt(document.getElementById('batch-size').value) || 100;
+    
+    localStorage.setItem('settings', JSON.stringify(settings));
+    alert('ការកំណត់ប្រតិបត្តិការត្រូវបានរក្សាទុក!');
+}
+
+// Initialize data management
+function initDataManagement() {
+    // Backup data button
+    const backupDataBtn = document.getElementById('backup-data-btn');
+    if (backupDataBtn) {
+        backupDataBtn.addEventListener('click', backupData);
+    }
+    
+    // Export buttons
+    const exportJsonBtn = document.getElementById('export-json-btn');
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', () => exportData('json'));
+    }
+    
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', () => exportData('csv'));
+    }
+    
+    const exportDataExcelBtn = document.getElementById('export-data-excel-btn');
+    if (exportDataExcelBtn) {
+        exportDataExcelBtn.addEventListener('click', () => exportData('excel'));
+    }
+}
+
+// Backup data
+function backupData() {
+    const data = {
+        timestamp: new Date().toISOString(),
+        inventory: JSON.parse(localStorage.getItem('inventory') || '[]'),
+        companies: JSON.parse(localStorage.getItem('companies') || '[]'),
+        settings: JSON.parse(localStorage.getItem('settings') || '{}'),
+        ocrSettings: JSON.parse(localStorage.getItem('ocrSettings') || '{}')
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert('ទិន្នន័យត្រូវបានបម្រុងទុកដោយជោគជ័យ!');
+}
+
+// Export data
+function exportData(format) {
+    const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
+    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
+    
+    if (inventory.length === 0 && companies.length === 0) {
+        alert('មិនទាន់មានទិន្នន័យដើម្បីនាំចេញ!');
+        return;
+    }
+    
+    let data, filename, mimeType;
+    
+    switch(format) {
+        case 'json':
+            data = { inventory, companies, settings };
+            filename = `inventory_export_${new Date().toISOString().split('T')[0]}.json`;
+            mimeType = 'application/json';
+            break;
+        case 'csv':
+            // Convert inventory to CSV
+            const headers = ['Company', 'Item', 'Category', 'Quantity', 'Price', 'Date', 'Notes'];
+            const rows = inventory.map(item => [
+                `"${item.company}"`,
+                `"${item.name}"`,
+                `"${item.category || ''}"`,
+                item.quantity,
+                item.price,
+                `"${item.date}"`,
+                `"${item.notes || ''}"`
+            ]);
+            data = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+            filename = `inventory_export_${new Date().toISOString().split('T')[0]}.csv`;
+            mimeType = 'text/csv';
+            break;
+        case 'excel':
+            exportToExcel();
+            return;
+    }
+    
+    const blob = new Blob([data], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert(`ទិន្នន័យត្រូវបាននាំចេញជា ${format.toUpperCase()} ដោយជោគជ័យ!`);
+}
+
+// Load settings from localStorage
+function loadSettings() {
+    const settings = JSON.parse(localStorage.getItem('settings')) || {};
+    
+    // Main company settings
+    const mainCompanyName = document.getElementById('main-company-name');
+    if (mainCompanyName) mainCompanyName.value = settings.companyName || '';
+    
+    const mainCompanyAddress = document.getElementById('main-company-address');
+    if (mainCompanyAddress) mainCompanyAddress.value = settings.address || '';
+    
+    const mainCompanyPhone = document.getElementById('main-company-phone');
+    if (mainCompanyPhone) mainCompanyPhone.value = settings.phone || '';
+    
+    // Update company name display
+    const companyNameDisplay = document.getElementById('company-name-display');
+    if (companyNameDisplay) {
+        companyNameDisplay.textContent = settings.companyName || 'ក្រុមហ៊ុនរបស់អ្នក';
+    }
+    
     // Load OCR settings
     loadOCRSettings();
     
-    // Initialize OCR processor when needed
-    document.querySelector('[data-tab="ocr-invoice"]').addEventListener('click', function() {
-        // Initialize OCR processor on first visit to OCR tab
-        if (typeof window.ocrProcessor === 'undefined') {
-            window.ocrProcessor = new InvoiceOCRProcessor();
-        }
-    });
+    // Load performance settings
+    const itemsPerPage = document.getElementById('items-per-page');
+    if (itemsPerPage) itemsPerPage.value = settings.itemsPerPage || 50;
+    
+    const performanceMode = document.getElementById('performance-mode');
+    if (performanceMode) performanceMode.value = settings.performanceMode || 'normal';
+    
+    const autoOptimize = document.getElementById('auto-optimize');
+    if (autoOptimize) autoOptimize.checked = settings.autoOptimize !== false;
+    
+    const cacheData = document.getElementById('cache-data');
+    if (cacheData) cacheData.checked = settings.cacheData !== false;
+    
+    const batchSize = document.getElementById('batch-size');
+    if (batchSize) batchSize.value = settings.batchSize || 100;
 }
 
 // Load OCR Settings to Form
@@ -806,125 +1197,30 @@ function loadOCRSettings() {
     if (!settings.quantityPatterns) settings.quantityPatterns = 'QTY\\s*(\\d+)|Quantity\\s*(\\d+)|ចំនួន\\s*(\\d+)|បរិមាណ\\s*(\\d+)';
     
     // Update form if exists
-    if (document.getElementById('default-ocr-language')) {
-        document.getElementById('default-ocr-language').value = settings.defaultLanguage;
-        document.getElementById('ocr-confidence').value = settings.confidence;
-        document.getElementById('confidence-value').textContent = settings.confidence + '%';
-        document.getElementById('auto-detect-items').checked = settings.autoDetectItems;
-        document.getElementById('price-patterns').value = settings.pricePatterns;
-        document.getElementById('quantity-patterns').value = settings.quantityPatterns;
-    }
+    const defaultLanguage = document.getElementById('default-ocr-language');
+    if (defaultLanguage) defaultLanguage.value = settings.defaultLanguage;
+    
+    const ocrConfidence = document.getElementById('ocr-confidence');
+    if (ocrConfidence) ocrConfidence.value = settings.confidence;
+    
+    const confidenceValue = document.getElementById('confidence-value');
+    if (confidenceValue) confidenceValue.textContent = settings.confidence + '%';
+    
+    const autoDetectItems = document.getElementById('auto-detect-items');
+    if (autoDetectItems) autoDetectItems.checked = settings.autoDetectItems;
+    
+    const pricePatterns = document.getElementById('price-patterns');
+    if (pricePatterns) pricePatterns.value = settings.pricePatterns;
+    
+    const quantityPatterns = document.getElementById('quantity-patterns');
+    if (quantityPatterns) quantityPatterns.value = settings.quantityPatterns;
     
     localStorage.setItem('ocrSettings', JSON.stringify(settings));
 }
 
-// Settings Management
-function initSettings() {
-    // Company settings form
-    document.getElementById('company-settings-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        saveCompanySettings();
-    });
-    
-    // General settings form
-    document.getElementById('general-settings-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        saveGeneralSettings();
-    });
-    
-    // Reset settings
-    document.getElementById('reset-settings').addEventListener('click', () => {
-        if (confirm('តើអ្នកពិតជាចង់កំណត់ការកំណត់ទាំងអស់ឡើងវិញមែនឬទេ?')) {
-            const defaultSettings = {
-                companyName: '',
-                address: '',
-                phone: '',
-                email: '',
-                dateFormat: 'dd/mm/yyyy',
-                currency: '$',
-                lowStockThreshold: 5,
-                itemsPerPage: 20
-            };
-            
-            localStorage.setItem('settings', JSON.stringify(defaultSettings));
-            loadSettings();
-            alert('ការកំណត់ត្រូវបានកំណត់ឡើងវិញ!');
-        }
-    });
-    
-    // Search company in settings
-    document.getElementById('search-company').addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        const rows = document.querySelectorAll('#company-list tbody tr');
-        
-        rows.forEach(row => {
-            const companyName = row.cells[1].textContent.toLowerCase();
-            row.style.display = companyName.includes(searchTerm) ? '' : 'none';
-        });
-    });
-}
-
-// Save company settings
-function saveCompanySettings() {
-    const companyName = document.getElementById('company-name').value.trim();
-    
-    if (!companyName) {
-        alert('សូមបញ្ចូលឈ្មោះក្រុមហ៊ុនសំខាន់!');
-        return;
-    }
-    
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    settings.companyName = companyName;
-    settings.address = document.getElementById('company-address').value.trim();
-    settings.phone = document.getElementById('company-phone').value.trim();
-    settings.email = document.getElementById('company-email').value.trim();
-    
-    localStorage.setItem('settings', JSON.stringify(settings));
-    
-    // Update company name display
-    document.getElementById('company-name-display').textContent = companyName;
-    
-    alert('ការកំណត់ក្រុមហ៊ុនត្រូវបានរក្សាទុក!');
-}
-
-// Save general settings
-function saveGeneralSettings() {
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    settings.dateFormat = document.getElementById('date-format').value;
-    settings.currency = document.getElementById('currency').value;
-    settings.lowStockThreshold = parseInt(document.getElementById('low-stock-threshold').value) || 5;
-    settings.itemsPerPage = parseInt(document.getElementById('items-per-page').value) || 20;
-    
-    localStorage.setItem('settings', JSON.stringify(settings));
-    
-    // Reload inventory to apply new settings
-    loadInventory();
-    updateStats();
-    
-    alert('ការកំណត់ទូទៅត្រូវបានរក្សាទុក!');
-}
-
-// Load settings from localStorage
-function loadSettings() {
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    // Company settings
-    document.getElementById('company-name').value = settings.companyName || '';
-    document.getElementById('company-address').value = settings.address || '';
-    document.getElementById('company-phone').value = settings.phone || '';
-    document.getElementById('company-email').value = settings.email || '';
-    
-    // General settings
-    document.getElementById('date-format').value = settings.dateFormat || 'dd/mm/yyyy';
-    document.getElementById('currency').value = settings.currency || '$';
-    document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 5;
-    document.getElementById('items-per-page').value = settings.itemsPerPage || 20;
-    
-    // Update company name display
-    document.getElementById('company-name-display').textContent = settings.companyName || 'ក្រុមហ៊ុនរបស់អ្នក';
-}
+// ==============================================
+// STATISTICS AND DATA DISPLAY
+// ==============================================
 
 // Update statistics
 function updateStats() {
@@ -939,28 +1235,27 @@ function updateStats() {
     const totalCompanies = companies.length;
     const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
-    document.getElementById('total-items').textContent = totalItems;
-    document.getElementById('out-of-stock').textContent = outOfStock;
-    document.getElementById('total-companies').textContent = totalCompanies;
-    document.getElementById('total-value').textContent = formatPrice(totalValue, currency);
+    const totalItemsEl = document.getElementById('total-items');
+    if (totalItemsEl) totalItemsEl.textContent = totalItems;
+    
+    const outOfStockEl = document.getElementById('out-of-stock');
+    if (outOfStockEl) outOfStockEl.textContent = outOfStock;
+    
+    const totalCompaniesEl = document.getElementById('total-companies');
+    if (totalCompaniesEl) totalCompaniesEl.textContent = totalCompanies;
+    
+    const totalValueEl = document.getElementById('total-value');
+    if (totalValueEl) totalValueEl.textContent = formatPrice(totalValue, currency);
     
     // Update recent items
     updateRecentItems();
-    
-    // Update data stats
-    const inventorySize = JSON.stringify(inventory).length;
-    const companiesSize = JSON.stringify(companies).length;
-    const totalSize = ((inventorySize + companiesSize) / 1024).toFixed(2);
-    document.getElementById('data-stats').innerHTML = `
-        កាលបរិច្ឆេទ: <span id="app-date"></span><br>
-        ទំហំទិន្នន័យ: ${totalSize} KB
-    `;
-    updateAppDate();
 }
 
 // Add recent item display
 function addRecentItem(item) {
     const recentItemsDiv = document.getElementById('recent-items');
+    if (!recentItemsDiv) return;
+    
     const settings = JSON.parse(localStorage.getItem('settings')) || {};
     const formattedDate = formatDate(item.date, settings.dateFormat);
     const currency = settings.currency || '$';
@@ -994,6 +1289,8 @@ function addRecentItem(item) {
 
 function updateRecentItems() {
     const recentItemsDiv = document.getElementById('recent-items');
+    if (!recentItemsDiv) return;
+    
     const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const settings = JSON.parse(localStorage.getItem('settings')) || {};
     const currency = settings.currency || '$';
@@ -1036,109 +1333,32 @@ function updateRecentItems() {
     });
 }
 
-// Format date based on settings
-function formatDate(dateString, format) {
-    if (!dateString) return '';
+// Update data statistics
+function updateDataStats() {
+    const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
+    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
+    const ocrSettings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
     
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
+    const inventorySize = JSON.stringify(inventory).length;
+    const companiesSize = JSON.stringify(companies).length;
+    const settingsSize = JSON.stringify(settings).length;
+    const ocrSettingsSize = JSON.stringify(ocrSettings).length;
+    const totalSize = ((inventorySize + companiesSize + settingsSize + ocrSettingsSize) / 1024).toFixed(2);
     
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
+    const dataTotalItems = document.getElementById('data-total-items');
+    if (dataTotalItems) dataTotalItems.textContent = inventory.length;
     
-    switch(format) {
-        case 'dd/mm/yyyy':
-            return `${day}/${month}/${year}`;
-        case 'mm/dd/yyyy':
-            return `${month}/${day}/${year}`;
-        case 'yyyy-mm-dd':
-            return `${year}-${month}-${day}`;
-        default:
-            return `${day}/${month}/${year}`;
-    }
+    const dataSize = document.getElementById('data-size');
+    if (dataSize) dataSize.textContent = `${totalSize} KB`;
+    
+    const dataTotalCompanies = document.getElementById('data-total-companies');
+    if (dataTotalCompanies) dataTotalCompanies.textContent = companies.length;
 }
 
-// Delete item
-function deleteItem(itemId) {
-    if (!confirm('តើអ្នកពិតជាចង់លុបទំនិញនេះមែនឬទេ?')) return;
-    
-    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    inventory = inventory.filter(item => item.id !== itemId);
-    
-    localStorage.setItem('inventory', JSON.stringify(inventory));
-    loadInventory();
-    updateStats();
-    loadCategoryFilter();
-}
-
-// Edit item
-function editItem(itemId) {
-    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const item = inventory.find(i => i.id === itemId);
-    
-    if (!item) return;
-    
-    // Switch to add item tab
-    document.querySelector('[data-tab="add-item"]').click();
-    
-    // Load companies first
-    loadCompanySelect();
-    
-    // Fill form with item data
-    setTimeout(() => {
-        document.getElementById('item-company').value = item.company;
-        document.getElementById('item-name').value = item.name;
-        document.getElementById('item-quantity').value = item.quantity;
-        document.getElementById('item-price').value = item.price;
-        document.getElementById('item-date').value = item.date;
-        document.getElementById('item-category').value = item.category || '';
-        document.getElementById('item-notes').value = item.notes || '';
-        
-        // Update form to edit mode
-        const form = document.getElementById('add-item-form');
-        const submitBtn = form.querySelector('button[type="submit"]');
-        
-        // Change submit button text
-        submitBtn.innerHTML = '<i class="fas fa-edit"></i> កែប្រែទំនិញ';
-        
-        // Remove previous edit listener if exists
-        form.removeEventListener('submit', handleEditSubmit);
-        
-        // Add edit listener
-        function handleEditSubmit(e) {
-            e.preventDefault();
-            
-            item.company = document.getElementById('item-company').value.trim();
-            item.name = document.getElementById('item-name').value.trim();
-            item.quantity = parseInt(document.getElementById('item-quantity').value);
-            item.price = parseFloat(document.getElementById('item-price').value) || 0;
-            item.date = document.getElementById('item-date').value;
-            item.category = document.getElementById('item-category').value.trim();
-            item.notes = document.getElementById('item-notes').value.trim();
-            
-            localStorage.setItem('inventory', JSON.stringify(inventory));
-            
-            // Reset form
-            form.reset();
-            document.getElementById('item-date').value = new Date().toISOString().split('T')[0];
-            submitBtn.innerHTML = '<i class="fas fa-save"></i> រក្សាទុកទំនិញ';
-            
-            // Remove edit listener
-            form.removeEventListener('submit', handleEditSubmit);
-            
-            loadInventory();
-            updateStats();
-            loadCategoryFilter();
-            alert('ទំនិញត្រូវបានកែប្រែដោយជោគជ័យ!');
-            
-            // Switch to inventory tab
-            document.querySelector('[data-tab="inventory"]').click();
-        }
-        
-        form.addEventListener('submit', handleEditSubmit);
-    }, 100);
-}
+// ==============================================
+// EXPORT FUNCTIONS
+// ==============================================
 
 // Export to Excel
 function exportToExcel() {
@@ -1152,10 +1372,10 @@ function exportToExcel() {
     }
     
     // Apply current filters
-    const filterCompany = document.getElementById('filter-company').value;
-    const filterCategory = document.getElementById('filter-category').value;
-    const filterStock = document.getElementById('filter-stock').value;
-    const searchTerm = document.getElementById('search-items').value.toLowerCase();
+    const filterCompany = document.getElementById('filter-company')?.value || 'all';
+    const filterCategory = document.getElementById('filter-category')?.value || 'all';
+    const filterStock = document.getElementById('filter-stock')?.value || 'all';
+    const searchTerm = document.getElementById('search-items')?.value.toLowerCase() || '';
     const lowStockThreshold = settings.lowStockThreshold || 5;
     
     if (filterCompany !== 'all') {
@@ -1285,57 +1505,6 @@ function exportToExcel() {
     XLSX.writeFile(wb, filename);
 }
 
-// Export to CSV
-function exportToCSV() {
-    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    if (inventory.length === 0) {
-        alert('មិនទាន់មានទិន្នន័យទំនិញដើម្បីនាំចេញ!');
-        return;
-    }
-    
-    // Get currency
-    const currency = settings.currency || '$';
-    
-    // Prepare CSV content
-    const headers = ['ល.រ', 'ក្រុមហ៊ុន', 'ទំនិញ', 'ប្រភេទ', 'ចំនួន', 'តម្លៃ', 'កាលបរិច្ឆេទ', 'ស្ថានភាពស្តុក'];
-    const rows = inventory.map((item, index) => {
-        let stockStatus = 'មានស្តុក';
-        if (item.quantity === 0) {
-            stockStatus = 'អស់ស្តុក';
-        } else if (item.quantity <= (settings.lowStockThreshold || 5)) {
-            stockStatus = 'ស្តុកទាប';
-        }
-        
-        return [
-            index + 1,
-            item.company,
-            `"${item.name}"`,
-            item.category || '-',
-            item.quantity,
-            formatPrice(item.price, currency),
-            formatDate(item.date, settings.dateFormat),
-            stockStatus
-        ].join(',');
-    });
-    
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    
-    // Create blob and download
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `inventory_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
 // Print inventory
 function printInventory() {
     let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
@@ -1343,10 +1512,10 @@ function printInventory() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
     
     // Apply current filters
-    const filterCompany = document.getElementById('filter-company').value;
-    const filterCategory = document.getElementById('filter-category').value;
-    const filterStock = document.getElementById('filter-stock').value;
-    const searchTerm = document.getElementById('search-items').value.toLowerCase();
+    const filterCompany = document.getElementById('filter-company')?.value || 'all';
+    const filterCategory = document.getElementById('filter-category')?.value || 'all';
+    const filterStock = document.getElementById('filter-stock')?.value || 'all';
+    const searchTerm = document.getElementById('search-items')?.value.toLowerCase() || '';
     const lowStockThreshold = settings.lowStockThreshold || 5;
     
     if (filterCompany !== 'all') {
@@ -1383,6 +1552,7 @@ function printInventory() {
     const currency = settings.currency || '$';
     
     const printContent = document.getElementById('print-content');
+    if (!printContent) return;
     
     // Build printable HTML
     let html = `
@@ -1602,59 +1772,11 @@ function printInventory() {
     printWindow.document.close();
 }
 
-// Add CSS for dynamic elements
-const style = document.createElement('style');
-style.textContent = `
-    .quantity-badge {
-        display: inline-block;
-        padding: 4px 8px;
-        background: #e9ecef;
-        border-radius: 12px;
-        font-weight: bold;
-        min-width: 40px;
-        text-align: center;
-    }
-    
-    .stock-status {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 0.8rem;
-        margin-left: 8px;
-        font-weight: 600;
-    }
-    
-    .out-of-stock-status {
-        background: #ffeaea;
-        color: #dc3545;
-        border: 1px solid #f5c6cb;
-    }
-    
-    .low-stock-status {
-        background: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeaa7;
-    }
-    
-    .in-stock-status {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-    }
-    
-    .text-muted {
-        color: #6c757d !important;
-    }
-    
-    .disabled {
-        opacity: 0.5;
-        cursor: not-allowed !important;
-        pointer-events: none;
-    }
-`;
-document.head.appendChild(style);
+// ==============================================
+// AUTO-BACKUP SYSTEM
+// ==============================================
 
-    // Auto-backup feature
+// Auto-backup feature
 function setupAutoBackup() {
     // Backup every hour
     setInterval(createAutoBackup, 60 * 60 * 1000);
@@ -1689,8 +1811,6 @@ function createAutoBackup() {
     localStorage.setItem('backups', JSON.stringify(backups));
 }
 
-// Initialize auto-backup
-setupAutoBackup();
 // ==============================================
 // OCR INVOICE PROCESSING SYSTEM
 // ==============================================
@@ -1722,7 +1842,11 @@ class InvoiceOCRProcessor {
     
     createCanvas() {
         const preview = document.getElementById('image-preview');
+        if (!preview) return;
+        
         this.canvas = document.createElement('canvas');
+        this.canvas.style.maxWidth = '100%';
+        this.canvas.style.height = 'auto';
         this.ctx = this.canvas.getContext('2d');
         
         // Create selection rectangle
@@ -1739,42 +1863,59 @@ class InvoiceOCRProcessor {
         const uploadInput = document.getElementById('invoice-upload');
         const dropArea = document.getElementById('drop-area');
         
-        uploadInput.addEventListener('change', (e) => this.handleFileUpload(e));
-        
-        // Drag and drop
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, preventDefaults, false);
-        });
-        
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        if (uploadInput) {
+            uploadInput.addEventListener('change', (e) => this.handleFileUpload(e));
         }
         
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, () => {
-                dropArea.style.borderColor = '#2c5282';
-                dropArea.style.background = '#ebf8ff';
-            }, false);
-        });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, () => {
-                dropArea.style.borderColor = '#4a90e2';
-                dropArea.style.background = '#f8fafc';
-            }, false);
-        });
-        
-        dropArea.addEventListener('drop', (e) => this.handleDrop(e), false);
+        if (dropArea) {
+            // Drag and drop
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.style.borderColor = '#2c5282';
+                    dropArea.style.background = '#ebf8ff';
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.style.borderColor = '#4a90e2';
+                    dropArea.style.background = '#f8fafc';
+                }, false);
+            });
+            
+            dropArea.addEventListener('drop', (e) => this.handleDrop(e), false);
+        }
         
         // OCR buttons
-        document.getElementById('select-area-btn').addEventListener('click', () => this.startAreaSelection());
-        document.getElementById('clear-area-btn').addEventListener('click', () => this.clearSelectedAreas());
-        document.getElementById('auto-detect-btn').addEventListener('click', () => this.autoDetectItems());
-        document.getElementById('preview-ocr-btn').addEventListener('click', () => this.previewOCRResults());
-        document.getElementById('add-all-items-btn').addEventListener('click', () => this.addAllItemsToInventory());
-        document.getElementById('export-invoice-excel-btn').addEventListener('click', () => this.exportInvoiceToExcel());
-        document.getElementById('clear-ocr-btn').addEventListener('click', () => this.resetOCRProcess());
+        const selectAreaBtn = document.getElementById('select-area-btn');
+        if (selectAreaBtn) selectAreaBtn.addEventListener('click', () => this.startAreaSelection());
+        
+        const clearAreaBtn = document.getElementById('clear-area-btn');
+        if (clearAreaBtn) clearAreaBtn.addEventListener('click', () => this.clearSelectedAreas());
+        
+        const autoDetectBtn = document.getElementById('auto-detect-btn');
+        if (autoDetectBtn) autoDetectBtn.addEventListener('click', () => this.autoDetectItems());
+        
+        const previewOcrBtn = document.getElementById('preview-ocr-btn');
+        if (previewOcrBtn) previewOcrBtn.addEventListener('click', () => this.previewOCRResults());
+        
+        const addAllItemsBtn = document.getElementById('add-all-items-btn');
+        if (addAllItemsBtn) addAllItemsBtn.addEventListener('click', () => this.addAllItemsToInventory());
+        
+        const exportInvoiceExcelBtn = document.getElementById('export-invoice-excel-btn');
+        if (exportInvoiceExcelBtn) exportInvoiceExcelBtn.addEventListener('click', () => this.exportInvoiceToExcel());
+        
+        const clearOcrBtn = document.getElementById('clear-ocr-btn');
+        if (clearOcrBtn) clearOcrBtn.addEventListener('click', () => this.resetOCRProcess());
         
         // Step navigation
         this.setupStepNavigation();
@@ -1811,11 +1952,15 @@ class InvoiceOCRProcessor {
     }
     
     updateProgressBar() {
-        const progress = ((this.currentStep + 1) / 3) * 100;
-        document.getElementById('ocr-progress-bar').style.width = `${progress}%`;
-        const stepNames = ['ការផ្ទុករូបភាព', 'ការកំណត់តំបន់', 'ការត្រួតពិនិត្យទិន្នន័យ'];
-        document.getElementById('ocr-progress-text').textContent = 
-            `ជំហាន ${this.currentStep + 1}/3: ${stepNames[this.currentStep]}`;
+        const progressBar = document.getElementById('ocr-progress-bar');
+        const progressText = document.getElementById('ocr-progress-text');
+        
+        if (progressBar && progressText) {
+            const progress = ((this.currentStep + 1) / 3) * 100;
+            progressBar.style.width = `${progress}%`;
+            const stepNames = ['ការផ្ទុករូបភាព', 'ការកំណត់តំបន់', 'ការត្រួតពិនិត្យទិន្នន័យ'];
+            progressText.textContent = `ជំហាន ${this.currentStep + 1}/3: ${stepNames[this.currentStep]}`;
+        }
     }
     
     handleFileUpload(event) {
@@ -1844,8 +1989,10 @@ class InvoiceOCRProcessor {
             await this.loadImage(imageUrl);
             
             // Update stats
-            document.getElementById('image-stats').textContent = 
-                `${file.name} (${Math.round(file.size / 1024)}KB)`;
+            const imageStats = document.getElementById('image-stats');
+            if (imageStats) {
+                imageStats.textContent = `${file.name} (${Math.round(file.size / 1024)}KB)`;
+            }
             
             this.nextStep();
             this.showProcessing(false);
@@ -1882,6 +2029,8 @@ class InvoiceOCRProcessor {
     }
     
     setupCanvasEvents() {
+        if (!this.canvas) return;
+        
         this.canvas.onmousedown = (e) => this.startSelection(e);
         this.canvas.onmousemove = (e) => this.updateSelection(e);
         this.canvas.onmouseup = () => this.endSelection();
@@ -1956,6 +2105,8 @@ class InvoiceOCRProcessor {
     
     updateSelectedAreasDisplay() {
         const container = document.getElementById('selected-areas');
+        if (!container) return;
+        
         container.innerHTML = '';
         
         this.selectedAreas.forEach((area, index) => {
@@ -2219,6 +2370,8 @@ class InvoiceOCRProcessor {
     
     displayOCRResults() {
         const output = document.getElementById('ocr-output');
+        if (!output) return;
+        
         let html = '';
         
         this.ocrResults.forEach((result, index) => {
@@ -2234,6 +2387,8 @@ class InvoiceOCRProcessor {
     
     displayParsedItems() {
         const container = document.getElementById('parsed-items-list');
+        if (!container) return;
+        
         container.innerHTML = '';
         
         if (this.parsedItems.length === 0) {
@@ -2263,13 +2418,18 @@ class InvoiceOCRProcessor {
         });
         
         // Update stats
-        document.getElementById('items-stats').textContent = this.parsedItems.length;
-        document.getElementById('words-stats').textContent = 
-            this.ocrResults.reduce((sum, result) => sum + result.text.split(/\s+/).length, 0);
+        const itemsStats = document.getElementById('items-stats');
+        if (itemsStats) itemsStats.textContent = this.parsedItems.length;
+        
+        const wordsStats = document.getElementById('words-stats');
+        if (wordsStats) {
+            wordsStats.textContent = this.ocrResults.reduce((sum, result) => sum + result.text.split(/\s+/).length, 0);
+        }
     }
     
     updateStats() {
-        document.getElementById('items-stats').textContent = this.parsedItems.length;
+        const itemsStats = document.getElementById('items-stats');
+        if (itemsStats) itemsStats.textContent = this.parsedItems.length;
     }
     
     async addSingleItem(index) {
@@ -2503,6 +2663,8 @@ class InvoiceOCRProcessor {
         // Show modal
         const modal = document.getElementById('invoice-preview-modal');
         const content = document.getElementById('invoice-preview-content');
+        if (!modal || !content) return;
+        
         content.innerHTML = '';
         content.appendChild(form);
         
@@ -2554,29 +2716,43 @@ class InvoiceOCRProcessor {
             this.isSelecting = false;
             
             // Clear displays
-            document.getElementById('ocr-output').innerHTML = '';
-            document.getElementById('parsed-items-list').innerHTML = '';
-            document.getElementById('selected-areas').innerHTML = '';
-            document.getElementById('image-preview').innerHTML = `
-                <div class="preview-placeholder">
-                    <i class="fas fa-image"></i>
-                    <p>រូបភាពនឹងបង្ហាញនៅទីនេះ</p>
-                </div>
-            `;
+            const ocrOutput = document.getElementById('ocr-output');
+            if (ocrOutput) ocrOutput.innerHTML = '';
             
-            // Recreate canvas
-            this.createCanvas();
+            const parsedItemsList = document.getElementById('parsed-items-list');
+            if (parsedItemsList) parsedItemsList.innerHTML = '';
+            
+            const selectedAreas = document.getElementById('selected-areas');
+            if (selectedAreas) selectedAreas.innerHTML = '';
+            
+            const imagePreview = document.getElementById('image-preview');
+            if (imagePreview) {
+                imagePreview.innerHTML = `
+                    <div class="preview-placeholder">
+                        <i class="fas fa-image"></i>
+                        <p>រូបភាពនឹងបង្ហាញនៅទីនេះ</p>
+                    </div>
+                `;
+                // Recreate canvas
+                this.createCanvas();
+            }
             
             // Reset stats
-            document.getElementById('image-stats').textContent = 'មិនទាន់មាន';
-            document.getElementById('words-stats').textContent = '0';
-            document.getElementById('items-stats').textContent = '0';
+            const imageStats = document.getElementById('image-stats');
+            if (imageStats) imageStats.textContent = 'មិនទាន់មាន';
+            
+            const wordsStats = document.getElementById('words-stats');
+            if (wordsStats) wordsStats.textContent = '0';
+            
+            const itemsStats = document.getElementById('items-stats');
+            if (itemsStats) itemsStats.textContent = '0';
             
             // Go back to first step
             this.showStep(0);
             
             // Reset file input
-            document.getElementById('invoice-upload').value = '';
+            const invoiceUpload = document.getElementById('invoice-upload');
+            if (invoiceUpload) invoiceUpload.value = '';
         }
     }
     
@@ -2618,6 +2794,8 @@ class InvoiceOCRProcessor {
         const companies = JSON.parse(localStorage.getItem('companies') || []);
         const select = document.getElementById('target-company');
         
+        if (!select) return;
+        
         select.innerHTML = '<option value="">-- ជ្រើសរើសក្រុមហ៊ុន --</option>';
         companies.forEach(company => {
             const option = document.createElement('option');
@@ -2636,8 +2814,7 @@ class DataOptimizer {
     constructor() {
         this.cache = new Map();
         this.optimized = false;
-        console.log('DataOptimizer
-            created');
+        console.log('DataOptimizer created');
     }
     
     // Optimize inventory data for storage
@@ -2685,11 +2862,13 @@ class DataOptimizer {
         const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
         const companies = JSON.parse(localStorage.getItem('companies') || '[]');
         const settings = JSON.parse(localStorage.getItem('settings') || '{}');
+        const ocrSettings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
         
         const totalSize = 
             JSON.stringify(inventory).length +
             JSON.stringify(companies).length +
-            JSON.stringify(settings).length;
+            JSON.stringify(settings).length +
+            JSON.stringify(ocrSettings).length;
         
         return {
             bytes: totalSize,
@@ -2772,72 +2951,3 @@ class DataOptimizer {
         return null;
     }
 }
-
-// ==============================================
-// MAIN APPLICATION
-// ==============================================
-
-// Global instances
-let ocrProcessor;
-let dataOptimizer;
-
-// Initialize app
-document.addEventListener('DOMContentLoaded', function() {
-    console.time('App initialization');
-    
-    // Initialize systems
-    ocrProcessor = new InvoiceOCRProcessor();
-    dataOptimizer = new DataOptimizer();
-    
-    // Initialize core app
-    initTabs();
-    initAddItem();
-    initInventory();
-    initSettings();
-    initModal();
-    
-    // Load data
-    loadCompanies();
-    loadInventory();
-    loadSettings();
-    
-    // Update UI
-    updateStats();
-    updateAppDate();
-    
-    // Auto-optimize if needed
-    setTimeout(() => {
-        dataOptimizer.autoOptimize();
-        updateDataStats();
-    }, 1000);
-    
-    console.timeEnd('App initialization');
-});
-
-// Update app date
-function updateAppDate() {
-    const now = new Date();
-    const options = { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric',
-        weekday: 'long'
-    };
-    document.getElementById('app-date').textContent = now.toLocaleDateString('km-KH', options);
-}
-
-// Update data statistics
-function updateDataStats() {
-    const stats = dataOptimizer.calculateStorageSize();
-    
-    document.getElementById('data-total-items').textContent = stats.items;
-    document.getElementById('data-size').textContent = `${stats.kb} KB`;
-    document.getElementById('data-total-companies').textContent = stats.companies;
-}
-// Keep all the existing functions from previous versions
-// (initTabs, initAddItem, initInventory, initSettings, etc.)
-// They should be integrated with the new OCR system
-
-// Note: Due to character limits, I've shown the complete OCR system.
-// The existing inventory management functions from previous versions
-// should be integrated with this new OCR system.
