@@ -1,30 +1,54 @@
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing app...');
+    console.time('App initialization');
     
-    // Initialize settings tabs
-    initSettingsTabs();
-    
-    // Initialize all components
+    // Initialize core systems first
     initTabs();
     initAddItem();
     initInventory();
     initSettings();
     initModal();
+    initSettingsTabs();  // Add this
     
-    // Load companies and data
+    // Load data
     loadCompanies();
     loadInventory();
     loadSettings();
+    
+    // Initialize OCR system
+    console.log('Initializing OCR system...');
+    try {
+        ocrProcessor = new InvoiceOCRProcessor();
+        console.log('OCR system initialized');
+    } catch (error) {
+        console.error('Failed to initialize OCR system:', error);
+    }
+    
+    // Initialize data optimizer
+    try {
+        dataOptimizer = new DataOptimizer();
+        console.log('Data optimizer initialized');
+    } catch (error) {
+        console.error('Failed to initialize data optimizer:', error);
+    }
     
     // Update UI
     updateStats();
     updateAppDate();
     
-    // Initialize OCR system
-    initOCRSystem();
+    // Setup auto-backup
+    setupAutoBackup();
     
-    console.log('App initialized successfully');
+    // Auto-optimize if needed
+    setTimeout(() => {
+        if (dataOptimizer) {
+            dataOptimizer.autoOptimize();
+            updateDataStats();
+        }
+    }, 1000);
+    
+    console.timeEnd('App initialization');
+    console.log('App fully initialized');
 });
 
 // Update app date
