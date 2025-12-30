@@ -5,22 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management System - OCR Invoice Processing</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Updated FontAwesome CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <!-- Tesseract.js for OCR (optional for now) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tesseract.js for OCR -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
-    <!-- SheetJS for Excel export (optional for now) -->
+    <!-- SheetJS for Excel export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Quick fixes -->
-    <script src="fixes.js"></script>
-    <!-- Main script -->
-    <script src="script.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
             <h1><i class="fas fa-boxes"></i> ប្រព័ន្ធគ្រប់គ្រងស្តុកទំនិញ + OCR</h1>
             <h2 id="company-name-display">ក្រុមហ៊ុនរបស់អ្នក</h2>
+            <div id="app-date" style="font-size: 0.9rem; opacity: 0.8; margin-top: 5px;"></div>
+            <div id="data-stats" style="font-size: 0.8rem; opacity: 0.7; margin-top: 5px;"></div>
         </header>
 
         <nav class="tabs">
@@ -380,8 +377,20 @@
                                         <i class="fas fa-plus"></i> បន្ថែមក្រុមហ៊ុន
                                     </button>
                                 </div>
-                                <div id="company-list-container">
-                                    <!-- Companies loaded here -->
+                                <div class="company-list-container" id="company-list-container">
+                                    <table id="company-list" style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th>ល.រ</th>
+                                                <th>ឈ្មោះក្រុមហ៊ុន</th>
+                                                <th>ទំនិញ</th>
+                                                <th>សកម្មភាព</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="company-list-body">
+                                            <!-- Companies will be loaded here -->
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -571,6 +580,10 @@
                     <div class="form-group">
                         <label for="modal-company-email">អ៊ីមែល:</label>
                         <input type="email" id="modal-company-email" placeholder="អ៊ីមែល...">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-company-notes">កំណត់ចំណាំ:</label>
+                        <textarea id="modal-company-notes" placeholder="កំណត់ចំណាំ..."></textarea>
                     </div>
                     <input type="hidden" id="modal-company-id">
                     <div class="modal-footer">
