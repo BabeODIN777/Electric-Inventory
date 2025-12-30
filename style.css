@@ -1,7 +1,3 @@
-
-
-
-
 /* OCR Specific Styles */
 .ocr-container {
     display: flex;
@@ -1793,6 +1789,102 @@ footer p {
     @page {
         margin: 0.5in;
     }
+}
+/* Add these styles to style.css */
+.quantity-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #e9ecef;
+    border-radius: 12px;
+    font-weight: bold;
+    min-width: 40px;
+    text-align: center;
+}
+
+.stock-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-left: 8px;
+    font-weight: 600;
+}
+
+.out-of-stock-status {
+    background: #ffeaea;
+    color: #dc3545;
+    border: 1px solid #f5c6cb;
+}
+
+.low-stock-status {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.in-stock-status {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.text-muted {
+    color: #6c757d !important;
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* OCR Processing Animation */
+.ocr-processing {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255,255,255,0.9);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.ocr-processing.active {
+    display: flex;
+}
+
+.spinner {
+    width: 80px;
+    height: 80px;
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid #4299e1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.selection-rectangle {
+    position: absolute;
+    border: 2px dashed #4299e1;
+    background: rgba(66, 153, 225, 0.1);
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* Confirmation button */
+.confidence {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin-top: 5px;
 }
 /* Keep existing styles from previous versions... */
 /* Add all the existing styles from the previous versions here */
