@@ -1,16 +1,30 @@
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing app...');
+    
+    // Initialize settings tabs
+    initSettingsTabs();
+    
     // Initialize all components
     initTabs();
     initAddItem();
     initInventory();
     initSettings();
     initModal();
+    
+    // Load companies and data
     loadCompanies();
     loadInventory();
     loadSettings();
+    
+    // Update UI
     updateStats();
     updateAppDate();
+    
+    // Initialize OCR system
+    initOCRSystem();
+    
+    console.log('App initialized successfully');
 });
 
 // Update app date
