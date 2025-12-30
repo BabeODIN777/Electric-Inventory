@@ -2636,6 +2636,8 @@ class DataOptimizer {
     constructor() {
         this.cache = new Map();
         this.optimized = false;
+        console.log('DataOptimizer
+            created');
     }
     
     // Optimize inventory data for storage
