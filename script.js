@@ -1627,6 +1627,9 @@ style.textContent = `
         cursor: not-allowed !important;
         pointer-events: none;
     }
+`;
+document.head.appendChild(style);
+
     // Auto-backup feature
 function setupAutoBackup() {
     // Backup every hour
@@ -2805,9 +2808,6 @@ function updateDataStats() {
     document.getElementById('data-size').textContent = `${stats.kb} KB`;
     document.getElementById('data-total-companies').textContent = stats.companies;
 }
-
-`;
-document.head.appendChild(style);
 // Keep all the existing functions from previous versions
 // (initTabs, initAddItem, initInventory, initSettings, etc.)
 // They should be integrated with the new OCR system
