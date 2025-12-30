@@ -698,6 +698,102 @@ function formatPrice(price, currency) {
     }
 }
 
+// Initialize Settings Tabs
+function initSettingsTabs() {
+    const settingsTabButtons = document.querySelectorAll('.settings-tab-btn');
+    const settingsPanes = document.querySelectorAll('.settings-pane');
+    
+    settingsTabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const settingsId = button.getAttribute('data-settings');
+            
+            // Update active tab button
+            settingsTabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            // Show active tab pane
+            settingsPanes.forEach(pane => pane.classList.remove('active'));
+            document.getElementById(settingsId + '-settings').classList.add('active');
+        });
+    });
+    
+    // Initialize OCR settings form
+    initOCRSettingsForm();
+}
+
+// Initialize OCR Settings Form
+function initOCRSettingsForm() {
+    const form = document.getElementById('ocr-settings-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveOCRSettings();
+        });
+        
+        // Update confidence value display
+        const confidenceSlider = document.getElementById('ocr-confidence');
+        const confidenceValue = document.getElementById('confidence-value');
+        
+        if (confidenceSlider && confidenceValue) {
+            confidenceSlider.addEventListener('input', function() {
+                confidenceValue.textContent = this.value + '%';
+            });
+        }
+    }
+}
+
+// Save OCR Settings
+function saveOCRSettings() {
+    const settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
+    
+    settings.defaultLanguage = document.getElementById('default-ocr-language').value;
+    settings.confidence = parseInt(document.getElementById('ocr-confidence').value);
+    settings.autoDetectItems = document.getElementById('auto-detect-items').checked;
+    settings.pricePatterns = document.getElementById('price-patterns').value;
+    settings.quantityPatterns = document.getElementById('quantity-patterns').value;
+    
+    localStorage.setItem('ocrSettings', JSON.stringify(settings));
+    alert('ការកំណត់ OCR ត្រូវបានរក្សាទុក!');
+}
+
+// Initialize OCR System
+function initOCRSystem() {
+    // Load OCR settings
+    loadOCRSettings();
+    
+    // Initialize OCR processor when needed
+    document.querySelector('[data-tab="ocr-invoice"]').addEventListener('click', function() {
+        // Initialize OCR processor on first visit to OCR tab
+        if (typeof window.ocrProcessor === 'undefined') {
+            window.ocrProcessor = new InvoiceOCRProcessor();
+        }
+    });
+}
+
+// Load OCR Settings to Form
+function loadOCRSettings() {
+    let settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
+    
+    // Set defaults
+    if (!settings.defaultLanguage) settings.defaultLanguage = 'khm';
+    if (!settings.confidence) settings.confidence = 70;
+    if (!settings.autoDetectItems) settings.autoDetectItems = true;
+    if (!settings.pricePatterns) settings.pricePatterns = 'USD\\s*(\\d+\\.?\\d*)|\\$\\s*(\\d+\\.?\\d*)|៛\\s*(\\d+\\.?\\d*)';
+    if (!settings.quantityPatterns) settings.quantityPatterns = 'QTY\\s*(\\d+)|Quantity\\s*(\\d+)|ចំនួន\\s*(\\d+)|បរិមាណ\\s*(\\d+)';
+    
+    // Update form if exists
+    if (document.getElementById('default-ocr-language')) {
+        document.getElementById('default-ocr-language').value = settings.defaultLanguage;
+        document.getElementById('ocr-confidence').value = settings.confidence;
+        document.getElementById('confidence-value').textContent = settings.confidence + '%';
+        document.getElementById('auto-detect-items').checked = settings.autoDetectItems;
+        document.getElementById('price-patterns').value = settings.pricePatterns;
+        document.getElementById('quantity-patterns').value = settings.quantityPatterns;
+    }
+    
+    localStorage.setItem('ocrSettings', JSON.stringify(settings));
+}
+
 // Settings Management
 function initSettings() {
     // Company settings form
