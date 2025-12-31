@@ -2037,6 +2037,110 @@ footer p {
         width: 100%;
     }
 }
+/* Dual OCR System Styles */
+.ocr-mode-selector {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    margin-bottom: 20px;
+}
+
+.ocr-mode-selector label {
+    cursor: pointer;
+    padding: 10px 15px;
+    background: white;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    transition: all 0.3s;
+    font-weight: 600;
+    color: #495057;
+}
+
+.ocr-mode-selector label:hover {
+    border-color: #1e3c72;
+    background: #f0f7ff;
+}
+
+.ocr-mode-selector input[type="radio"]:checked + * {
+    color: #1e3c72;
+}
+
+.ocr-mode-selector input[type="radio"]:checked ~ label {
+    border-color: #1e3c72;
+    background: #e3f2fd;
+}
+
+.ocr-instructions {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+    border-left: 5px solid #1e3c72;
+}
+
+.ocr-instructions h5 {
+    color: #1e3c72;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ocr-instructions ul {
+    padding-left: 20px;
+    margin-bottom: 0;
+}
+
+.ocr-instructions li {
+    margin-bottom: 8px;
+    color: #495057;
+}
+
+.simple-ocr-instructions {
+    display: block;
+}
+
+.smart-ocr-instructions {
+    display: none;
+}
+
+/* OCR Results Tabs */
+.ocr-results-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.ocr-results-tab {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-weight: 600;
+    color: #718096;
+    transition: all 0.3s;
+}
+
+.ocr-results-tab:hover {
+    color: #4299e1;
+}
+
+.ocr-results-tab.active {
+    color: #4299e1;
+    border-bottom-color: #4299e1;
+}
+
+.ocr-results-content {
+    display: none;
+    animation: fadeIn 0.5s ease;
+}
+
+.ocr-results-content.active {
+    display: block;
+}
 /* Keep existing styles from previous versions... */
 /* Add all the existing styles from the previous versions here */
 /* I'm showing only the new styles above, but you should combine with existing styles */
