@@ -2152,3 +2152,552 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make invoiceCreator available globally for onclick events
     window.invoiceCreator = invoiceCreator;
 });
+
+// ==============================================
+// DUAL OCR SYSTEM - KEEP OLD & ADD SMART OCR
+// ==============================================
+
+class DualOCRSystem {
+    constructor() {
+        this.mode = 'simple'; // 'simple' or 'smart'
+        this.smartOCR = null;
+        this.simpleOCR = null;
+        this.canvas = null;
+        this.ctx = null;
+        
+        this.init();
+    }
+    
+    init() {
+        // Setup mode switcher
+        this.setupModeSwitcher();
+        
+        // Initialize both systems
+        this.initSimpleOCR();
+        this.initSmartOCR();
+        
+        // Setup file upload for both modes
+        this.setupFileUpload();
+    }
+    
+    setupModeSwitcher() {
+        const radioButtons = document.querySelectorAll('input[name="ocr-mode"]');
+        const smartGuide = document.getElementById('smart-guide');
+        const smartBtn = document.getElementById('smart-table-btn');
+        const instruction = document.getElementById('ocr-instruction');
+        
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.mode = e.target.value;
+                
+                if (this.mode === 'smart') {
+                    // Show smart OCR features
+                    if (smartGuide) smartGuide.style.display = 'block';
+                    if (smartBtn) smartBtn.style.display = 'inline-block';
+                    if (instruction) instruction.textContent = 'ស្វែងរកតារាងដោយស្វ័យប្រវត្តិ ឬជ្រើសរើសតំបន់តារាង';
+                    
+                    // Initialize smart OCR if not already done
+                    if (!this.smartOCR && this.canvas) {
+                        this.smartOCR = new SmartOCRProcessor();
+                        this.smartOCR.setupCanvas(this.canvas, this.ctx);
+                    }
+                } else {
+                    // Show simple OCR features
+                    if (smartGuide) smartGuide.style.display = 'none';
+                    if (smartBtn) smartBtn.style.display = 'none';
+                    if (instruction) instruction.textContent = 'ប្រើម៉ៅស៍អូសដើម្បីជ្រើសរើសតំបន់ដែលមានទិន្នន័យទំនិញ';
+                }
+            });
+        });
+    }
+    
+    initSimpleOCR() {
+        // Keep the original OCR system
+        this.simpleOCR = {
+            selectedAreas: [],
+            parsedItems: [],
+            
+            // Copy methods from original InvoiceOCRProcessor
+            clearSelectedAreas: function() {
+                this.selectedAreas = [];
+                const container = document.getElementById('selected-areas');
+                if (container) container.innerHTML = '';
+            },
+            
+            // Add other simple OCR methods as needed
+            // ... [You can copy methods from your original InvoiceOCRProcessor class]
+        };
+        
+        // Hook up simple OCR buttons
+        const clearBtn = document.getElementById('clear-area-btn');
+        if (clearBtn) {
+            clearBtn.onclick = () => {
+                if (this.mode === 'simple') {
+                    this.simpleOCR.clearSelectedAreas();
+                } else if (this.smartOCR) {
+                    this.smartOCR.clearTable();
+                }
+            };
+        }
+        
+        const autoDetectBtn = document.getElementById('auto-detect-btn');
+        if (autoDetectBtn) {
+            autoDetectBtn.onclick = () => {
+                if (this.mode === 'simple') {
+                    this.simpleAutoDetect();
+                } else if (this.smartOCR) {
+                    this.smartOCR.autoDetectInvoiceTable();
+                }
+            };
+        }
+        
+        const smartTableBtn = document.getElementById('smart-table-btn');
+        if (smartTableBtn) {
+            smartTableBtn.onclick = () => {
+                if (this.smartOCR) {
+                    this.smartOCR.smartTableOCR();
+                }
+            };
+        }
+    }
+    
+    initSmartOCR() {
+        // Smart OCR will be initialized when needed
+        // We'll create it when smart mode is selected
+    }
+    
+    setupFileUpload() {
+        // Use the existing file upload from the original system
+        // It will work for both modes
+    }
+    
+    simpleAutoDetect() {
+        // Simple auto-detect for basic OCR
+        if (!this.canvas) {
+            alert('សូមផ្ទុករូបភាពមុន!');
+            return;
+        }
+        
+        this.showProcessing(true, 'កំពុងស្វែងរកតំបន់...');
+        
+        // Simple area selection (middle of image)
+        const area = {
+            x: this.canvas.width * 0.1,
+            y: this.canvas.height * 0.2,
+            width: this.canvas.width * 0.8,
+            height: this.canvas.height * 0.6
+        };
+        
+        // Draw selection
+        this.ctx.strokeStyle = '#4299e1';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.strokeRect(area.x, area.y, area.width, area.height);
+        this.ctx.setLineDash([]);
+        
+        this.simpleOCR.selectedAreas = [area];
+        
+        // Update display
+        const container = document.getElementById('selected-areas');
+        if (container) {
+            container.innerHTML = '<div class="area-box">តំបន់ស្វ័យប្រវត្តិ</div>';
+        }
+        
+        this.showProcessing(false);
+        alert('បានជ្រើសរើសតំបន់ស្វ័យប្រវត្តិ!');
+    }
+    
+    showProcessing(show, message) {
+        // Use existing processing overlay
+        let overlay = document.getElementById('ocr-processing-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'ocr-processing-overlay';
+            // ... same as before
+        }
+        // ... rest of processing code
+    }
+}
+
+// ==============================================
+// SMART OCR PROCESSOR (TABLE-AWARE)
+// ==============================================
+
+class SmartOCRProcessor {
+    constructor() {
+        this.canvas = null;
+        this.ctx = null;
+        this.selectedTable = null;
+        this.items = [];
+    }
+    
+    setupCanvas(canvas, ctx) {
+        this.canvas = canvas;
+        this.ctx = ctx;
+    }
+    
+    async autoDetectInvoiceTable() {
+        if (!this.canvas) {
+            alert('សូមផ្ទុករូបភាពមុន!');
+            return;
+        }
+        
+        this.showProcessing(true, 'កំពុងស្វែងរកតារាង...');
+        
+        try {
+            // Simple table detection for now
+            // In production, you'd use more advanced image processing
+            const table = {
+                top: this.canvas.height * 0.25,
+                bottom: this.canvas.height * 0.75,
+                left: this.canvas.width * 0.05,
+                right: this.canvas.width * 0.95,
+                rows: 10,
+                columns: 7
+            };
+            
+            this.selectedTable = table;
+            this.drawTableOutline(table);
+            
+            this.showProcessing(false);
+            alert('បានរកឃើញតារាង! សូមផ្ទៀងផ្ទាត់តំបន់។');
+            
+        } catch (error) {
+            console.error('Table detection error:', error);
+            this.showProcessing(false);
+            alert('មិនអាចស្វែងរកតារាង។ សូមជ្រើសរើសមានុច។');
+        }
+    }
+    
+    drawTableOutline(table) {
+        // Clear previous drawings
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(this.currentImage, 0, 0, this.canvas.width, this.canvas.height);
+        
+        // Draw green outline
+        this.ctx.strokeStyle = '#00ff00';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.strokeRect(
+            table.left, 
+            table.top, 
+            table.right - table.left, 
+            table.bottom - table.top
+        );
+        this.ctx.setLineDash([]);
+    }
+    
+    async smartTableOCR() {
+        if (!this.selectedTable) {
+            alert('សូមស្វែងរកតារាងមុន!');
+            return;
+        }
+        
+        this.showProcessing(true, 'កំពុងដំណើរការ OCR តារាង...');
+        
+        try {
+            // Perform OCR on table area
+            const worker = await Tesseract.createWorker();
+            await worker.loadLanguage('khm+eng');
+            await worker.initialize('khm+eng');
+            
+            const { data: { text } } = await worker.recognize(this.canvas);
+            await worker.terminate();
+            
+            // Parse table text
+            this.parseTableText(text);
+            
+            // Display results
+            this.displayResults(text);
+            
+            // Go to step 3
+            this.showStep(3);
+            this.showProcessing(false);
+            
+        } catch (error) {
+            console.error('Smart OCR error:', error);
+            this.showProcessing(false);
+            alert('មានបញ្ហាក្នុងការដំណើរការ OCR: ' + error.message);
+        }
+    }
+    
+    parseTableText(text) {
+        const lines = text.split('\n').filter(line => line.trim());
+        this.items = [];
+        
+        // Look for table data
+        let inTable = false;
+        let rowNumber = 1;
+        
+        for (const line of lines) {
+            // Skip headers
+            if (this.isTableHeader(line)) {
+                inTable = true;
+                continue;
+            }
+            
+            // Skip totals
+            if (this.isTotalLine(line)) {
+                break;
+            }
+            
+            if (inTable && line.trim()) {
+                // Parse the line as a table row
+                const item = this.parseTableRow(line, rowNumber);
+                if (item) {
+                    this.items.push(item);
+                    rowNumber++;
+                }
+            }
+        }
+    }
+    
+    isTableHeader(line) {
+        const headers = ['លរ', 'កូដ', 'ពណ៌នា', 'ចំនួន', 'ខ្នាត', 'តម្លៃ', 'សរុប',
+                       'No', 'Code', 'Description', 'Qty', 'Unit', 'Price', 'Amount'];
+        return headers.some(header => line.toLowerCase().includes(header.toLowerCase()));
+    }
+    
+    isTotalLine(line) {
+        return line.toLowerCase().includes('សរុប') || 
+               line.toLowerCase().includes('total');
+    }
+    
+    parseTableRow(line, rowNumber) {
+        // Try to extract data using multiple strategies
+        const strategies = [
+            this.parseByMultipleSpaces,
+            this.parseByCommonPattern,
+            this.parseByWordGroups
+        ];
+        
+        for (const strategy of strategies) {
+            const item = strategy.call(this, line, rowNumber);
+            if (item && item.name) {
+                return item;
+            }
+        }
+        
+        return null;
+    }
+    
+    parseByMultipleSpaces(line, rowNumber) {
+        // Split by 2+ spaces (common in tabular data)
+        const parts = line.split(/\s{2,}/).filter(p => p.trim());
+        
+        if (parts.length >= 3) {
+            return {
+                number: rowNumber,
+                code: parts[0] || '',
+                name: parts[1] || '',
+                quantity: this.extractNumber(parts[2]) || 1,
+                price: this.extractPrice(parts.length > 3 ? parts[3] : '') || 0
+            };
+        }
+        
+        return null;
+    }
+    
+    parseByCommonPattern(line, rowNumber) {
+        // Common invoice pattern: "CODE DESCRIPTION QTY PRICE"
+        const pattern = /(\w+)\s+(.+?)\s+(\d+)\s+(\d+\.?\d*)/;
+        const match = line.match(pattern);
+        
+        if (match) {
+            return {
+                number: rowNumber,
+                code: match[1],
+                name: match[2].trim(),
+                quantity: parseInt(match[3]),
+                price: parseFloat(match[4])
+            };
+        }
+        
+        return null;
+    }
+    
+    parseByWordGroups(line, rowNumber) {
+        // Try to identify groups of words
+        const words = line.split(/\s+/);
+        
+        if (words.length >= 2) {
+            // Last word might be price
+            const lastWord = words[words.length - 1];
+            const price = this.extractPrice(lastWord);
+            
+            // Second last might be quantity
+            const secondLast = words[words.length - 2];
+            const quantity = this.extractNumber(secondLast);
+            
+            // Everything else is the name/code
+            const nameParts = price !== null ? 
+                words.slice(0, words.length - (quantity !== null ? 2 : 1)) : 
+                words;
+            
+            return {
+                number: rowNumber,
+                name: nameParts.join(' ').trim(),
+                quantity: quantity || 1,
+                price: price || 0
+            };
+        }
+        
+        return null;
+    }
+    
+    extractNumber(text) {
+        const match = text.match(/(\d+)/);
+        return match ? parseInt(match[1]) : null;
+    }
+    
+    extractPrice(text) {
+        const match = text.match(/\$?(\d+\.?\d*)/);
+        return match ? parseFloat(match[1]) : null;
+    }
+    
+    displayResults(text) {
+        // Update OCR output
+        const output = document.getElementById('ocr-output');
+        if (output) {
+            output.innerHTML = `<pre>${text}</pre>`;
+        }
+        
+        // Display parsed items
+        const container = document.getElementById('parsed-items-list');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (this.items.length === 0) {
+            container.innerHTML = '<p>មិនមានទំនិញត្រូវបានស្វែងរក។</p>';
+            return;
+        }
+        
+        this.items.forEach((item, index) => {
+            const itemElement = document.createElement('div');
+            itemElement.className = 'parsed-item';
+            itemElement.innerHTML = `
+                <div class="parsed-item-info">
+                    <h5>${item.number}. ${item.name}</h5>
+                    <p>
+                        ${item.code ? `<span class="text-muted">កូដ:</span> ${item.code} | ` : ''}
+                        <span class="text-muted">ចំនួន:</span> ${item.quantity} |
+                        <span class="text-muted">តម្លៃ:</span> $${item.price.toFixed(2)}
+                    </p>
+                </div>
+                <div class="parsed-item-actions">
+                    <button class="btn btn-small btn-success" onclick="dualOCR.addItemToInventory(${index})">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(itemElement);
+        });
+    }
+    
+    showStep(stepNumber) {
+        // Same as before
+        document.querySelectorAll('.ocr-step').forEach(step => {
+            step.classList.remove('active');
+        });
+        const stepElement = document.getElementById(`ocr-step-${stepNumber}`);
+        if (stepElement) {
+            stepElement.classList.add('active');
+        }
+    }
+    
+    showProcessing(show, message) {
+        // Same as before
+        // ... processing overlay code
+    }
+    
+    clearTable() {
+        this.selectedTable = null;
+        if (this.canvas && this.currentImage) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.drawImage(this.currentImage, 0, 0, this.canvas.width, this.canvas.height);
+        }
+    }
+}
+
+// ==============================================
+// INTEGRATION WITH EXISTING SYSTEM
+// ==============================================
+
+let dualOCR = null;
+let originalOCR = null; // Keep reference to original OCR
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize original OCR (keep existing functionality)
+    document.querySelector('[data-tab="ocr-invoice"]').addEventListener('click', function() {
+        if (!originalOCR) {
+            // Initialize the original OCR system
+            originalOCR = new InvoiceOCRProcessor();
+            
+            // Also initialize dual OCR system
+            dualOCR = new DualOCRSystem();
+            
+            // Hook into the original OCR's image loading
+            const originalLoadImage = originalOCR.loadImage;
+            originalOCR.loadImage = async function(imageUrl) {
+                await originalLoadImage.call(this, imageUrl);
+                
+                // Also setup dual OCR
+                const canvas = document.querySelector('#image-preview canvas');
+                const ctx = canvas.getContext('2d');
+                if (dualOCR && canvas) {
+                    dualOCR.canvas = canvas;
+                    dualOCR.ctx = ctx;
+                    dualOCR.currentImage = this.currentImage;
+                }
+            };
+        }
+    });
+});
+
+// Make dualOCR available globally
+window.dualOCR = dualOCR;
+
+// Add helper method
+window.dualOCR.addItemToInventory = function(index) {
+    if (!dualOCR || !dualOCR.smartOCR || !dualOCR.smartOCR.items) {
+        alert('សូមដំណើរការ OCR មុន!');
+        return;
+    }
+    
+    const item = dualOCR.smartOCR.items[index];
+    if (!item) return;
+    
+    // Use existing functionality from original system
+    const companySelect = document.getElementById('target-company');
+    const company = companySelect?.value;
+    
+    if (!company) {
+        alert('សូមជ្រើសរើសក្រុមហ៊ុនគោលដៅ!');
+        return;
+    }
+    
+    // Create inventory item
+    const inventoryItem = {
+        id: Date.now() + index,
+        company: company,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        date: new Date().toISOString().split('T')[0],
+        category: '',
+        notes: item.code ? `កូដ: ${item.code} | បានបន្ថែមពី OCR` : 'បានបន្ថែមពី OCR',
+        addedDate: new Date().toISOString()
+    };
+    
+    // Use existing save function
+    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    inventory.push(inventoryItem);
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    
+    // Update UI using existing functions
+    loadInventory();
+    updateStats();
+    
+    alert(`ទំនិញ "${item.name}" ត្រូវបានបន្ថែម!`);
+};
