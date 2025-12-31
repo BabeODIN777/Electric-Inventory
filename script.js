@@ -1536,3 +1536,604 @@ class InvoiceOCRProcessor {
         }
     }
 }
+
+// ==============================================
+// ENHANCED OCR PROCESSOR WITH TABLE DETECTION
+// ==============================================
+
+class EnhancedInvoiceOCRProcessor {
+    constructor() {
+        this.currentImage = null;
+        this.selectedAreas = [];
+        this.ocrResults = [];
+        this.parsedItems = [];
+        this.isProcessing = false;
+        this.setupEvents();
+    }
+    
+    setupEvents() {
+        // Auto-detect for table
+        const autoDetectBtn = document.getElementById('auto-detect-btn');
+        if (autoDetectBtn) {
+            autoDetectBtn.addEventListener('click', () => this.enhancedAutoDetect());
+        }
+        
+        // Add table detection button
+        const areaControls = document.querySelector('.area-controls');
+        if (areaControls) {
+            const columnDetectBtn = document.createElement('button');
+            columnDetectBtn.className = 'btn btn-small btn-info';
+            columnDetectBtn.innerHTML = '<i class="fas fa-table"></i> ស្វែងរកតារាង';
+            columnDetectBtn.onclick = () => this.detectTableColumns();
+            areaControls.appendChild(columnDetectBtn);
+        }
+        
+        // File upload handling (copied from original with enhancements)
+        const uploadInput = document.getElementById('invoice-upload');
+        const dropArea = document.getElementById('drop-area');
+        
+        if (uploadInput) {
+            uploadInput.addEventListener('change', (e) => this.handleFileUpload(e));
+        }
+        
+        if (dropArea) {
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropArea.style.background = '#e9ecef';
+            });
+            
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.style.background = '#f8fafc';
+            });
+            
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.style.background = '#f8fafc';
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.match('image.*')) {
+                    this.processImageFile(file);
+                } else {
+                    alert('សូមផ្ទុកតែរូបភាពប៉ុណ្ណោះ!');
+                }
+            });
+        }
+    }
+    
+    async enhancedAutoDetect() {
+        if (!this.currentImage) {
+            alert('សូមផ្ទុករូបភាពមុន!');
+            return;
+        }
+        
+        this.showProcessing(true, 'កំពុងស្វែងរកតារាងទំនិញ...');
+        
+        try {
+            const canvas = document.querySelector('#image-preview canvas');
+            if (!canvas) {
+                this.showProcessing(false);
+                return;
+            }
+            
+            // Estimate table area (middle section of invoice)
+            const tableY = canvas.height * 0.3;  // Start 30% down (after header)
+            const tableHeight = canvas.height * 0.5;  // 50% height
+            const tableX = canvas.width * 0.05;  // Start 5% from left
+            const tableWidth = canvas.width * 0.9;  // 90% width
+            
+            this.selectedAreas = [{
+                id: Date.now(),
+                x: tableX,
+                y: tableY,
+                width: tableWidth,
+                height: tableHeight
+            }];
+            
+            this.updateSelectedAreasDisplay();
+            this.showProcessing(false);
+            alert('បានស្វែងរកតំបន់តារាង! សូមផ្ទៀងផ្ទាត់តំបន់។');
+            
+        } catch (error) {
+            console.error('Table detection error:', error);
+            this.showProcessing(false);
+            alert('មិនអាចស្វែងរកតារាងដោយស្វ័យប្រវត្តិ។ សូមជ្រើសរើសមានុច។');
+        }
+    }
+    
+    async detectTableColumns() {
+        alert('This feature requires more advanced image processing. For now, please select the table area manually.');
+    }
+    
+    // Copy the rest of the methods from the original InvoiceOCRProcessor
+    // but use the enhanced parsing methods below
+    // ... [copy all the methods from the original InvoiceOCRProcessor class]
+    
+    enhancedParseTable(text) {
+        const lines = text.split('\n').filter(line => line.trim());
+        const items = [];
+        
+        // Look for table rows
+        lines.forEach(line => {
+            // Skip headers
+            if (this.isTableHeader(line)) return;
+            
+            // Try to parse item
+            const item = this.parseInvoiceLine(line);
+            if (item) {
+                items.push(item);
+            }
+        });
+        
+        this.parsedItems = items;
+        this.displayParsedItems();
+        
+        if (items.length > 0) {
+            alert(`បានស្វែងរកទំនិញ ${items.length} ក្នុងតារាង!`);
+        }
+    }
+    
+    isTableHeader(line) {
+        const headers = ['លរ', 'N°', 'កូដទំនិញ', 'Item Code', 'Description', 
+                        'ចំនួន', 'Qty', 'ខ្នាត', 'UM', 'តម្លៃ', 'Price', 
+                        'Amount', 'បរិមាណ', 'សរុប', 'Total'];
+        return headers.some(header => line.toLowerCase().includes(header.toLowerCase()));
+    }
+    
+    parseInvoiceLine(line) {
+        // Common invoice line patterns
+        // Pattern 1: "506964 EGAL สัญญาณที่ 5 COB 5W-ยูดม-ถาถ่าย 9096V 1 EA 4.00 4.00"
+        // Pattern 2: "503860 สัญญาณที่ LED E14-5W-3ถาถ่าย 5 EA 1.30 6.50"
+        
+        const patterns = [
+            // Pattern for full invoice lines with code
+            /(\d{6,})\s+(.+?)\s+(\d+)\s+(EA|PCS|SET|BOX)\s+(\d+\.?\d*)\s+(\d+\.?\d*)/,
+            // Pattern without unit
+            /(\d{6,})\s+(.+?)\s+(\d+)\s+(\d+\.?\d*)\s+(\d+\.?\d*)/,
+            // Pattern for simple items
+            /(.+?)\s+(\d+)\s+(EA|PCS|SET|BOX)\s+(\d+\.?\d*)/
+        ];
+        
+        for (const pattern of patterns) {
+            const match = line.match(pattern);
+            if (match) {
+                return {
+                    code: match[1] || '',
+                    name: match[2]?.trim() || line.trim(),
+                    quantity: parseInt(match[3]) || 1,
+                    unit: match[4] || 'EA',
+                    price: parseFloat(match[5]) || 0,
+                    amount: parseFloat(match[6]) || 0
+                };
+            }
+        }
+        
+        return null;
+    }
+    
+    showProcessing(show, message = 'កំពុងដំណើរការ...') {
+        // Same as original
+        console.log(message);
+    }
+}
+
+// ==============================================
+// INVOICE CREATOR CLASS
+// ==============================================
+
+class InvoiceCreator {
+    constructor() {
+        this.currentInvoice = {
+            id: Date.now(),
+            customer: '',
+            phone: '',
+            date: new Date().toISOString().split('T')[0],
+            number: 'INV-' + Date.now().toString().slice(-6),
+            items: [],
+            subtotal: 0,
+            total: 0
+        };
+        this.init();
+    }
+    
+    init() {
+        // Set up date and invoice number
+        const dateInput = document.getElementById('invoice-date');
+        const numberInput = document.getElementById('invoice-number');
+        
+        if (dateInput) dateInput.value = this.currentInvoice.date;
+        if (numberInput) numberInput.value = this.currentInvoice.number;
+        
+        // Event listeners
+        this.setupEventListeners();
+    }
+    
+    setupEventListeners() {
+        const addBtn = document.getElementById('add-invoice-item');
+        const saveBtn = document.getElementById('save-invoice');
+        const printBtn = document.getElementById('print-invoice');
+        const excelBtn = document.getElementById('export-invoice-excel');
+        const imageBtn = document.getElementById('export-invoice-image');
+        const clearBtn = document.getElementById('clear-invoice');
+        
+        if (addBtn) addBtn.addEventListener('click', () => this.addItemRow());
+        if (saveBtn) saveBtn.addEventListener('click', () => this.saveInvoice());
+        if (printBtn) printBtn.addEventListener('click', () => this.printInvoice());
+        if (excelBtn) excelBtn.addEventListener('click', () => this.exportToExcel());
+        if (imageBtn) imageBtn.addEventListener('click', () => this.exportAsImage());
+        if (clearBtn) clearBtn.addEventListener('click', () => this.clearInvoice());
+        
+        // Auto-generate invoice number
+        const numberInput = document.getElementById('invoice-number');
+        if (numberInput) {
+            numberInput.addEventListener('focus', (e) => {
+                if (e.target.value === 'INV-') {
+                    e.target.value = 'INV-' + Date.now().toString().slice(-6);
+                }
+            });
+        }
+    }
+    
+    addItemRow(itemData = {}) {
+        const tbody = document.getElementById('invoice-items-body');
+        if (!tbody) return;
+        
+        const rowId = Date.now();
+        const rowCount = tbody.children.length;
+        
+        const row = document.createElement('tr');
+        row.id = `invoice-item-${rowId}`;
+        row.innerHTML = `
+            <td>${rowCount + 1}</td>
+            <td><input type="text" class="form-control small" value="${itemData.code || ''}" placeholder="កូដ"></td>
+            <td><input type="text" class="form-control" value="${itemData.name || ''}" placeholder="ពណ៌នាទំនិញ"></td>
+            <td><input type="number" class="form-control small qty" value="${itemData.quantity || 1}" min="1"></td>
+            <td>
+                <select class="form-control small">
+                    <option value="EA" ${(itemData.unit || 'EA') === 'EA' ? 'selected' : ''}>EA</option>
+                    <option value="PCS" ${(itemData.unit || 'EA') === 'PCS' ? 'selected' : ''}>PCS</option>
+                    <option value="SET" ${(itemData.unit || 'EA') === 'SET' ? 'selected' : ''}>SET</option>
+                    <option value="BOX" ${(itemData.unit || 'EA') === 'BOX' ? 'selected' : ''}>BOX</option>
+                </select>
+            </td>
+            <td><input type="number" class="form-control small price" value="${itemData.price || 0}" min="0" step="0.01"></td>
+            <td class="amount">$0.00</td>
+            <td>
+                <button class="btn btn-danger btn-sm" onclick="invoiceCreator.removeItem(${rowId})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+        
+        // Add calculation listeners
+        const qtyInput = row.querySelector('.qty');
+        const priceInput = row.querySelector('.price');
+        
+        const updateAmount = () => {
+            const qty = parseFloat(qtyInput.value) || 0;
+            const price = parseFloat(priceInput.value) || 0;
+            const amount = qty * price;
+            row.querySelector('.amount').textContent = `$${amount.toFixed(2)}`;
+            this.updateTotals();
+        };
+        
+        qtyInput.addEventListener('input', updateAmount);
+        priceInput.addEventListener('input', updateAmount);
+        updateAmount();
+    }
+    
+    removeItem(rowId) {
+        const row = document.getElementById(`invoice-item-${rowId}`);
+        if (row) {
+            row.remove();
+            this.updateRowNumbers();
+            this.updateTotals();
+        }
+    }
+    
+    updateRowNumbers() {
+        const rows = document.querySelectorAll('#invoice-items-body tr');
+        rows.forEach((row, index) => {
+            row.cells[0].textContent = index + 1;
+        });
+    }
+    
+    updateTotals() {
+        const rows = document.querySelectorAll('#invoice-items-body tr');
+        let subtotal = 0;
+        
+        rows.forEach(row => {
+            const amountText = row.querySelector('.amount')?.textContent || '$0';
+            const amount = parseFloat(amountText.replace('$', '')) || 0;
+            subtotal += amount;
+        });
+        
+        this.currentInvoice.subtotal = subtotal;
+        this.currentInvoice.total = subtotal;
+        
+        const totalElement = document.getElementById('invoice-total');
+        if (totalElement) {
+            totalElement.textContent = `$${subtotal.toFixed(2)}`;
+        }
+    }
+    
+    saveInvoice() {
+        // Get form data
+        const customerInput = document.getElementById('invoice-customer');
+        const phoneInput = document.getElementById('invoice-phone');
+        const dateInput = document.getElementById('invoice-date');
+        const numberInput = document.getElementById('invoice-number');
+        
+        if (!customerInput || !customerInput.value.trim()) {
+            alert('សូមបញ្ចូលឈ្មោះអតិថិជន!');
+            return;
+        }
+        
+        this.currentInvoice = {
+            id: Date.now(),
+            customer: customerInput.value.trim(),
+            phone: phoneInput?.value.trim() || '',
+            date: dateInput?.value || new Date().toISOString().split('T')[0],
+            number: numberInput?.value || 'INV-' + Date.now().toString().slice(-6),
+            items: [],
+            subtotal: 0,
+            total: 0,
+            createdAt: new Date().toISOString()
+        };
+        
+        // Collect items
+        const rows = document.querySelectorAll('#invoice-items-body tr');
+        rows.forEach(row => {
+            const item = {
+                code: row.cells[1].querySelector('input')?.value || '',
+                name: row.cells[2].querySelector('input')?.value || '',
+                quantity: parseFloat(row.cells[3].querySelector('input')?.value) || 0,
+                unit: row.cells[4].querySelector('select')?.value || 'EA',
+                price: parseFloat(row.cells[5].querySelector('input')?.value) || 0,
+                amount: parseFloat(row.querySelector('.amount')?.textContent?.replace('$', '')) || 0
+            };
+            
+            if (item.name && item.quantity > 0) {
+                this.currentInvoice.items.push(item);
+            }
+        });
+        
+        if (this.currentInvoice.items.length === 0) {
+            alert('សូមបន្ថែមទំនិញយ៉ាងហោចណាស់មួយ!');
+            return;
+        }
+        
+        // Calculate totals
+        this.currentInvoice.subtotal = this.currentInvoice.items.reduce((sum, item) => sum + item.amount, 0);
+        this.currentInvoice.total = this.currentInvoice.subtotal;
+        
+        // Save to localStorage
+        let invoices = JSON.parse(localStorage.getItem('invoices')) || [];
+        invoices.push(this.currentInvoice);
+        localStorage.setItem('invoices', JSON.stringify(invoices));
+        
+        // Generate preview
+        this.generatePreview();
+        
+        alert('វិក័យប័ត្រត្រូវបានរក្សាទុកដោយជោគជ័យ!');
+    }
+    
+    generatePreview() {
+        const preview = document.getElementById('invoice-preview');
+        if (!preview) return;
+        
+        const settings = JSON.parse(localStorage.getItem('settings')) || {};
+        
+        const html = `
+            <div class="invoice-template" id="invoice-print-content" style="background: white; padding: 30px; border-radius: 10px; max-width: 800px; margin: auto;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h2 style="color: #1e3c72;">${settings.companyName || 'ក្រុមហ៊ុន'}</h2>
+                    <p>${settings.address || ''}</p>
+                    <p>ទូរស័ព្ទ: ${settings.phone || ''}</p>
+                </div>
+                
+                <h3 style="text-align: center; border-bottom: 2px solid #1e3c72; padding-bottom: 10px;">វិក័យប័ត្រ</h3>
+                
+                <div style="display: flex; justify-content: space-between; margin: 20px 0;">
+                    <div>
+                        <p><strong>អតិថិជន:</strong> ${this.currentInvoice.customer}</p>
+                        <p><strong>លេខទូរស័ព្ទ:</strong> ${this.currentInvoice.phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p><strong>លេខវិក័យប័ត្រ:</strong> ${this.currentInvoice.number}</p>
+                        <p><strong>កាលបរិច្ឆេទ:</strong> ${formatDate(this.currentInvoice.date)}</p>
+                    </div>
+                </div>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <thead style="background: #1e3c72; color: white;">
+                        <tr>
+                            <th style="padding: 10px; border: 1px solid #ddd;">លរ</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">កូដ</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">ពណ៌នា</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">ចំនួន</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">ខ្នាត</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">តម្លៃ</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">សរុប</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.currentInvoice.items.map((item, index) => `
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${index + 1}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${item.code}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${item.name}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.unit}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${item.price.toFixed(2)}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${item.amount.toFixed(2)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot style="background: #f8f9fa; font-weight: bold;">
+                        <tr>
+                            <td colspan="6" style="padding: 10px; border: 1px solid #ddd; text-align: right;">សរុប:</td>
+                            <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">$${this.currentInvoice.total.toFixed(2)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px dashed #ddd;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <p>ហត្ថលេខាអតិថិជន</p>
+                            <p style="margin-top: 50px;">_________________________</p>
+                        </div>
+                        <div>
+                            <p>ហត្ថលេខាអ្នកលក់</p>
+                            <p style="margin-top: 50px;">_________________________</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        preview.innerHTML = html;
+    }
+    
+    printInvoice() {
+        const preview = document.getElementById('invoice-print-content');
+        if (!preview) {
+            alert('សូមរក្សាទុកវិក័យប័ត្រមុន!');
+            return;
+        }
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>វិក័យប័ត្រ - ${this.currentInvoice.number}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    @page { margin: 0.5in; }
+                </style>
+            </head>
+            <body>${preview.outerHTML}</body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }
+    
+    exportToExcel() {
+        if (!this.currentInvoice.items || this.currentInvoice.items.length === 0) {
+            alert('មិនមានទិន្នន័យត្រូវនាំចេញ!');
+            return;
+        }
+        
+        try {
+            // Prepare data
+            const excelData = [
+                ['លេខវិក័យប័ត្រ', this.currentInvoice.number],
+                ['អតិថិជន', this.currentInvoice.customer],
+                ['កាលបរិច្ឆេទ', formatDate(this.currentInvoice.date)],
+                ['', ''],
+                ['លរ', 'កូដ', 'ពណ៌នា', 'ចំនួន', 'ខ្នាត', 'តម្លៃ', 'សរុប']
+            ];
+            
+            this.currentInvoice.items.forEach((item, index) => {
+                excelData.push([
+                    index + 1,
+                    item.code,
+                    item.name,
+                    item.quantity,
+                    item.unit,
+                    item.price,
+                    item.amount
+                ]);
+            });
+            
+            excelData.push(['', '', '', '', '', 'សរុប:', this.currentInvoice.total]);
+            
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(excelData);
+            XLSX.utils.book_append_sheet(wb, ws, 'វិក័យប័ត្រ');
+            
+            // Save file
+            const filename = `វិក័យប័ត្រ_${this.currentInvoice.number}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            
+            alert('វិក័យប័ត្រត្រូវបាននាំចេញទៅ Excel!');
+            
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('មិនអាចនាំចេញ: ' + error.message);
+        }
+    }
+    
+    exportAsImage() {
+        alert('To save as image, please use the print function and save as PDF/Image from print dialog.');
+        // For actual image export, you'd need html2canvas library
+    }
+    
+    clearInvoice() {
+        if (confirm('តើអ្នកពិតជាចង់ចាប់ផ្ដើមឡើងវិញមែនឬទេ?')) {
+            const inputs = [
+                'invoice-customer',
+                'invoice-phone',
+                'invoice-date',
+                'invoice-number'
+            ];
+            
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            
+            // Reset date and number
+            document.getElementById('invoice-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('invoice-number').value = 'INV-' + Date.now().toString().slice(-6);
+            
+            // Clear items
+            document.getElementById('invoice-items-body').innerHTML = '';
+            document.getElementById('invoice-total').textContent = '$0.00';
+            document.getElementById('invoice-preview').innerHTML = '';
+            
+            // Reset object
+            this.currentInvoice = {
+                id: Date.now(),
+                customer: '',
+                phone: '',
+                date: new Date().toISOString().split('T')[0],
+                number: 'INV-' + Date.now().toString().slice(-6),
+                items: [],
+                subtotal: 0,
+                total: 0
+            };
+        }
+    }
+}
+
+// ==============================================
+// INITIALIZE NEW SYSTEMS
+// ==============================================
+
+let enhancedOCR = null;
+let invoiceCreator = null;
+
+// Initialize when tabs are clicked
+document.addEventListener('DOMContentLoaded', function() {
+    // Enhanced OCR
+    document.querySelector('[data-tab="ocr-invoice"]')?.addEventListener('click', function() {
+        if (!enhancedOCR) {
+            enhancedOCR = new EnhancedInvoiceOCRProcessor();
+        }
+    });
+    
+    // Invoice Creator
+    document.querySelector('[data-tab="create-invoice"]')?.addEventListener('click', function() {
+        if (!invoiceCreator) {
+            invoiceCreator = new InvoiceCreator();
+        }
+    });
+    
+    // Make invoiceCreator available globally for onclick events
+    window.invoiceCreator = invoiceCreator;
+});
