@@ -123,23 +123,57 @@
                                 </select>
                             </div>
                             
-                            <div class="ocr-area-selector">
-                                <div class="area-controls">
-                                    <button class="btn btn-small" id="select-area-btn">
-                                        <i class="fas fa-vector-square"></i> ជ្រើសរើសតំបន់
-                                    </button>
-                                    <button class="btn btn-small btn-secondary" id="clear-area-btn">
-                                        <i class="fas fa-times"></i> លុបតំបន់
-                                    </button>
-                                    <button class="btn btn-small btn-info" id="auto-detect-btn">
-                                        <i class="fas fa-robot"></i> ស្វ័យប្រវត្តិស្វែងរក
-                                    </button>
-                                </div>
-                                <div class="area-info">
-                                    <p>ប្រើម៉ៅស៍អូសដើម្បីជ្រើសរើសតំបន់ដែលមានទិន្នន័យទំនិញ</p>
-                                    <div id="selected-areas"></div>
-                                </div>
-                            </div>
+                            <!-- Replace the ocr-area-selector section with this -->
+<div class="ocr-area-selector">
+    <div class="ocr-mode-selector" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="ocr-mode" value="simple" checked> 
+                <i class="fas fa-bolt"></i> OCR សាមញ្ញ
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="ocr-mode" value="smart"> 
+                <i class="fas fa-brain"></i> OCR ឆ្លាត (សម្រាប់តារាង)
+            </label>
+        </div>
+        <p class="text-muted" style="font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i> 
+            OCR សាមញ្ញ: សម្រាប់អត្ថបទទូទៅ | 
+            OCR ឆ្លាត: សម្រាប់វិក័យប័ត្រជាតារាង
+        </p>
+    </div>
+    
+    <div class="area-controls">
+        <button class="btn btn-small" id="select-area-btn">
+            <i class="fas fa-vector-square"></i> ជ្រើសរើសតំបន់
+        </button>
+        <button class="btn btn-small btn-secondary" id="clear-area-btn">
+            <i class="fas fa-times"></i> លុបតំបន់
+        </button>
+        <button class="btn btn-small btn-info" id="auto-detect-btn">
+            <i class="fas fa-robot"></i> ស្វ័យប្រវត្តិស្វែងរក
+        </button>
+        <button class="btn btn-small btn-success" id="smart-table-btn" style="display: none;">
+            <i class="fas fa-brain"></i> ស្វែងរកតារាង
+        </button>
+    </div>
+    
+    <div class="ocr-table-guide" id="smart-guide" style="display: none;">
+        <h4><i class="fas fa-lightbulb"></i> គន្លឹះសម្រាប់ OCR តារាង</h4>
+        <ol>
+            <li>ស្វែងរកតារាងដោយស្វ័យប្រវត្តិដោយចុច "ស្វែងរកតារាង"</li>
+            <li>ធានាថាបន្ទាត់ពណ៌បៃតងគ្របដណ្តប់តារាងទាំងស្រុង</li>
+            <li>ចុច "OCR តារាងឆ្លាត" ដើម្បីវិភាគជួរឈរនិងជួរ</li>
+            <li>ពិនិត្យលទ្ធផល និងកែសម្រួលបើចាំបាច់</li>
+            <li>បន្ថែមទំនិញទៅក្នុងស្តុក</li>
+        </ol>
+    </div>
+    
+    <div class="area-info">
+        <p id="ocr-instruction">ប្រើម៉ៅស៍អូសដើម្បីជ្រើសរើសតំបន់ដែលមានទិន្នន័យទំនិញ</p>
+        <div id="selected-areas"></div>
+    </div>
+</div>
                             
                             <div class="preview-controls">
                                 <button class="btn btn-primary" id="preview-ocr-btn">
