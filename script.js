@@ -2,128 +2,33 @@
 // MAIN APPLICATION INITIALIZATION
 // ==============================================
 
-// Global instances
-let ocrProcessor;
-let dataOptimizer;
+let ocrProcessor = null;
 
-// Initialize app
 document.addEventListener('DOMContentLoaded', function() {
-    console.time('App initialization');
+    console.log('Initializing Inventory Management System...');
     
-    // Initialize core systems first
+    // Initialize all systems
     initTabs();
     initAddItem();
     initInventory();
     initSettings();
     initModal();
-    initSettingsTabs();
     
-    // Load data
+    // Load initial data
     loadCompanies();
     loadInventory();
     loadSettings();
     
-    // Initialize OCR system
-    console.log('Initializing OCR system...');
-    try {
-        ocrProcessor = new InvoiceOCRProcessor();
-        console.log('OCR system initialized');
-    } catch (error) {
-        console.error('Failed to initialize OCR system:', error);
-    }
-    
-    // Initialize data optimizer
-    try {
-        dataOptimizer = new DataOptimizer();
-        console.log('Data optimizer initialized');
-    } catch (error) {
-        console.error('Failed to initialize data optimizer:', error);
-    }
-    
-    // Update UI
-    updateStats();
-    updateAppDate();
-    updateDataStats();
-    
-    // Setup auto-backup
-    setupAutoBackup();
-    
-    // Auto-optimize if needed
-    setTimeout(() => {
-        if (dataOptimizer) {
-            dataOptimizer.autoOptimize();
-            updateDataStats();
+    // Initialize OCR when needed
+    document.querySelector('[data-tab="ocr-invoice"]').addEventListener('click', function() {
+        if (!ocrProcessor) {
+            console.log('Initializing OCR system...');
+            ocrProcessor = new InvoiceOCRProcessor();
         }
-    }, 1000);
-    
-    console.timeEnd('App initialization');
-    console.log('App fully initialized');
-});
-
-// ==============================================
-// UTILITY FUNCTIONS
-// ==============================================
-
-// Update app date
-function updateAppDate() {
-    const now = new Date();
-    const options = { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric',
-        weekday: 'long'
-    };
-    const dateElement = document.getElementById('app-date');
-    if (dateElement) {
-        dateElement.textContent = now.toLocaleDateString('km-KH', options);
-    }
-}
-
-// Format price with currency
-function formatPrice(price, currency) {
-    const formatter = new Intl.NumberFormat('km-KH', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
     });
     
-    const formattedPrice = formatter.format(price || 0);
-    
-    switch(currency) {
-        case '$':
-            return `$${formattedPrice}`;
-        case '៛':
-            return `${formattedPrice}៛`;
-        case '€':
-            return `€${formattedPrice}`;
-        case '¥':
-            return `¥${formattedPrice}`;
-        default:
-            return `$${formattedPrice}`;
-    }
-}
-
-// Format date based on settings
-function formatDate(dateString, format) {
-    if (!dateString) return '';
-    
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    
-    switch(format) {
-        case 'dd/mm/yyyy':
-            return `${day}/${month}/${year}`;
-        case 'mm/dd/yyyy':
-            return `${month}/${day}/${year}`;
-        case 'yyyy-mm-dd':
-            return `${year}-${month}-${day}`;
-        default:
-            return `${day}/${month}/${year}`;
-    }
-}
+    console.log('System initialized successfully');
+});
 
 // ==============================================
 // TAB NAVIGATION
@@ -134,118 +39,403 @@ function initTabs() {
     const tabPanes = document.querySelectorAll('.tab-pane');
 
     tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const tabId = button.getAttribute('data-tab');
+        button.addEventListener('click', function() {
+            const tabId = this.getAttribute('data-tab');
             
-            // Update active tab button
+            // Remove active class from all tabs
             tabButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            
-            // Show active tab pane
             tabPanes.forEach(pane => pane.classList.remove('active'));
-            const targetPane = document.getElementById(tabId);
-            if (targetPane) {
-                targetPane.classList.add('active');
-            }
             
-            // Refresh data when switching to inventory tab
+            // Add active class to clicked tab
+            this.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // Refresh data for inventory tab
             if (tabId === 'inventory') {
                 loadInventory();
                 loadCompanyFilter();
                 loadCategoryFilter();
             }
             
-            // Initialize OCR when switching to OCR tab
-            if (tabId === 'ocr-invoice' && typeof ocrProcessor !== 'undefined') {
-                ocrProcessor.loadCompanySelect();
+            // Load companies for OCR tab
+            if (tabId === 'ocr-invoice') {
+                loadTargetCompanySelect();
             }
         });
     });
 }
 
 // ==============================================
-// MODAL SYSTEM
+// ADD ITEM FUNCTIONALITY
+// ==============================================
+
+function initAddItem() {
+    const form = document.getElementById('add-item-form');
+    const resetBtn = document.getElementById('reset-form');
+    const dateInput = document.getElementById('item-date');
+    
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.value = today;
+    
+    // Load company select
+    loadCompanySelect();
+    
+    // Form submit handler
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const company = document.getElementById('item-company').value.trim();
+        const itemName = document.getElementById('item-name').value.trim();
+        const quantity = parseInt(document.getElementById('item-quantity').value) || 0;
+        const price = parseFloat(document.getElementById('item-price').value) || 0;
+        const date = document.getElementById('item-date').value;
+        const category = document.getElementById('item-category').value.trim();
+        const notes = document.getElementById('item-notes').value.trim();
+        
+        // Validation
+        if (!company) {
+            alert('សូមជ្រើសរើសក្រុមហ៊ុន!');
+            return;
+        }
+        
+        if (!itemName) {
+            alert('សូមបញ្ចូលឈ្មោះទំនិញ!');
+            return;
+        }
+        
+        // Create item object
+        const item = {
+            id: Date.now(),
+            company: company,
+            name: itemName,
+            quantity: quantity,
+            price: price,
+            date: date,
+            category: category,
+            notes: notes,
+            addedDate: new Date().toISOString()
+        };
+        
+        // Save to localStorage
+        let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+        inventory.push(item);
+        localStorage.setItem('inventory', JSON.stringify(inventory));
+        
+        // Reset form
+        form.reset();
+        dateInput.value = today;
+        
+        // Update UI
+        addRecentItem(item);
+        updateStats();
+        loadCategoryFilter();
+        
+        alert('ទំនិញត្រូវបានបន្ថែមដោយជោគជ័យ!');
+        
+        // Switch to inventory tab
+        document.querySelector('[data-tab="inventory"]').click();
+    });
+    
+    // Reset form
+    resetBtn.addEventListener('click', function() {
+        form.reset();
+        dateInput.value = today;
+    });
+}
+
+// ==============================================
+// INVENTORY MANAGEMENT
+// ==============================================
+
+function initInventory() {
+    // Export to Excel
+    document.getElementById('export-excel').addEventListener('click', exportToExcel);
+    
+    // Print inventory
+    document.getElementById('print-inventory').addEventListener('click', printInventory);
+    
+    // Import CSV
+    document.getElementById('import-csv').addEventListener('click', importFromCSV);
+    
+    // Clear filters
+    document.getElementById('clear-filters').addEventListener('click', function() {
+        document.getElementById('filter-company').value = 'all';
+        document.getElementById('filter-category').value = 'all';
+        document.getElementById('filter-stock').value = 'all';
+        document.getElementById('search-items').value = '';
+        loadInventory();
+    });
+    
+    // Filter event listeners
+    document.getElementById('filter-company').addEventListener('change', loadInventory);
+    document.getElementById('filter-category').addEventListener('change', loadInventory);
+    document.getElementById('filter-stock').addEventListener('change', loadInventory);
+    
+    // Search with debounce
+    let searchTimeout;
+    document.getElementById('search-items').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(loadInventory, 300);
+    });
+}
+
+function loadInventory() {
+    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    const tbody = document.getElementById('inventory-list');
+    
+    // Get filter values
+    const filterCompany = document.getElementById('filter-company').value;
+    const filterCategory = document.getElementById('filter-category').value;
+    const filterStock = document.getElementById('filter-stock').value;
+    const searchTerm = document.getElementById('search-items').value.toLowerCase();
+    
+    // Apply filters
+    if (filterCompany !== 'all') {
+        inventory = inventory.filter(item => item.company === filterCompany);
+    }
+    
+    if (filterCategory !== 'all') {
+        inventory = inventory.filter(item => item.category === filterCategory);
+    }
+    
+    if (filterStock !== 'all') {
+        if (filterStock === 'in-stock') {
+            inventory = inventory.filter(item => item.quantity > 0);
+        } else if (filterStock === 'out-of-stock') {
+            inventory = inventory.filter(item => item.quantity === 0);
+        }
+    }
+    
+    if (searchTerm) {
+        inventory = inventory.filter(item => 
+            item.name.toLowerCase().includes(searchTerm) ||
+            item.company.toLowerCase().includes(searchTerm) ||
+            (item.category && item.category.toLowerCase().includes(searchTerm))
+        );
+    }
+    
+    // Clear table
+    tbody.innerHTML = '';
+    
+    if (inventory.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 50px; color: #6c757d;">
+                    <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 20px; display: block; opacity: 0.5;"></i>
+                    <p>មិនមានទំនិញតាមលក្ខខណ្ឌដែលបានជ្រើសរើស</p>
+                </td>
+            </tr>
+        `;
+        updateStats();
+        return;
+    }
+    
+    // Add items to table
+    inventory.forEach(item => {
+        const row = document.createElement('tr');
+        if (item.quantity === 0) {
+            row.classList.add('out-of-stock');
+        }
+        
+        row.innerHTML = `
+            <td><strong>${item.company}</strong></td>
+            <td>
+                <div style="font-weight: 600;">${item.name}</div>
+                ${item.notes ? `<small style="color: #6c757d;">${item.notes}</small>` : ''}
+            </td>
+            <td>${item.category || '-'}</td>
+            <td>
+                <span class="quantity-badge">${item.quantity}</span>
+                ${item.quantity === 0 ? '<span class="stock-status out-of-stock-status">អស់ស្តុក</span>' : ''}
+            </td>
+            <td style="font-weight: 600; color: #28a745;">$${item.price.toFixed(2)}</td>
+            <td>${formatDate(item.date)}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="action-btn edit-btn" onclick="editItem(${item.id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn delete-btn" onclick="deleteItem(${item.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    updateStats();
+}
+
+function deleteItem(itemId) {
+    if (!confirm('តើអ្នកពិតជាចង់លុបទំនិញនេះមែនឬទេ?')) return;
+    
+    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    inventory = inventory.filter(item => item.id !== itemId);
+    
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    loadInventory();
+    loadCategoryFilter();
+    alert('ទំនិញត្រូវបានលុបដោយជោគជ័យ!');
+}
+
+function editItem(itemId) {
+    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    const item = inventory.find(i => i.id === itemId);
+    
+    if (!item) return;
+    
+    // Switch to add item tab
+    document.querySelector('[data-tab="add-item"]').click();
+    
+    // Load companies first
+    loadCompanySelect();
+    
+    // Fill form with item data
+    setTimeout(() => {
+        document.getElementById('item-company').value = item.company;
+        document.getElementById('item-name').value = item.name;
+        document.getElementById('item-quantity').value = item.quantity;
+        document.getElementById('item-price').value = item.price;
+        document.getElementById('item-date').value = item.date;
+        document.getElementById('item-category').value = item.category || '';
+        document.getElementById('item-notes').value = item.notes || '';
+        
+        // Change submit button text
+        const submitBtn = document.querySelector('#add-item-form button[type="submit"]');
+        submitBtn.innerHTML = '<i class="fas fa-edit"></i> កែប្រែទំនិញ';
+        
+        // Update form submit handler
+        const form = document.getElementById('add-item-form');
+        form.onsubmit = function(e) {
+            e.preventDefault();
+            
+            // Update item
+            item.company = document.getElementById('item-company').value.trim();
+            item.name = document.getElementById('item-name').value.trim();
+            item.quantity = parseInt(document.getElementById('item-quantity').value) || 0;
+            item.price = parseFloat(document.getElementById('item-price').value) || 0;
+            item.date = document.getElementById('item-date').value;
+            item.category = document.getElementById('item-category').value.trim();
+            item.notes = document.getElementById('item-notes').value.trim();
+            
+            // Save to localStorage
+            localStorage.setItem('inventory', JSON.stringify(inventory));
+            
+            // Reset form
+            form.reset();
+            document.getElementById('item-date').value = new Date().toISOString().split('T')[0];
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> រក្សាទុកទំនិញ';
+            
+            // Restore original handler
+            initAddItem();
+            
+            // Update UI
+            loadInventory();
+            updateStats();
+            loadCategoryFilter();
+            
+            alert('ទំនិញត្រូវបានកែប្រែដោយជោគជ័យ!');
+            document.querySelector('[data-tab="inventory"]').click();
+        };
+    }, 100);
+}
+
+// ==============================================
+// SETTINGS MANAGEMENT
+// ==============================================
+
+function initSettings() {
+    // Company settings form
+    document.getElementById('company-settings-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveCompanySettings();
+    });
+    
+    // Search company in settings
+    document.getElementById('search-company').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const rows = document.querySelectorAll('#company-list tbody tr');
+        
+        rows.forEach(row => {
+            const companyName = row.cells[1].textContent.toLowerCase();
+            row.style.display = companyName.includes(searchTerm) ? '' : 'none';
+        });
+    });
+}
+
+function saveCompanySettings() {
+    const companyName = document.getElementById('company-name').value.trim();
+    const address = document.getElementById('company-address').value.trim();
+    const phone = document.getElementById('company-phone').value.trim();
+    
+    if (!companyName) {
+        alert('សូមបញ្ចូលឈ្មោះក្រុមហ៊ុន!');
+        return;
+    }
+    
+    const settings = JSON.parse(localStorage.getItem('settings')) || {};
+    settings.companyName = companyName;
+    settings.address = address;
+    settings.phone = phone;
+    
+    localStorage.setItem('settings', JSON.stringify(settings));
+    document.getElementById('company-name-display').textContent = companyName;
+    alert('ការកំណត់ក្រុមហ៊ុនត្រូវបានរក្សាទុក!');
+}
+
+function loadSettings() {
+    const settings = JSON.parse(localStorage.getItem('settings')) || {};
+    
+    document.getElementById('company-name').value = settings.companyName || '';
+    document.getElementById('company-address').value = settings.address || '';
+    document.getElementById('company-phone').value = settings.phone || '';
+    
+    if (settings.companyName) {
+        document.getElementById('company-name-display').textContent = settings.companyName;
+    }
+}
+
+// ==============================================
+// COMPANY MANAGEMENT
 // ==============================================
 
 function initModal() {
     const modal = document.getElementById('company-modal');
     const closeButtons = document.querySelectorAll('.modal-close');
-    const addCompanyBtn = document.getElementById('add-new-company');
+    const addCompanyBtn = document.getElementById('add-company-btn');
     
-    // Open modal for adding new company
-    if (addCompanyBtn) {
-        addCompanyBtn.addEventListener('click', () => openCompanyModal());
-    }
+    // Open modal
+    addCompanyBtn.addEventListener('click', function() {
+        document.getElementById('modal-title').textContent = 'បន្ថែមក្រុមហ៊ុនថ្មី';
+        document.getElementById('company-form').reset();
+        document.getElementById('modal-company-id').value = '';
+        modal.classList.add('active');
+    });
     
     // Close modal
     closeButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', function() {
             modal.classList.remove('active');
-            resetCompanyForm();
         });
     });
     
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
+    // Close when clicking outside
+    modal.addEventListener('click', function(e) {
         if (e.target === modal) {
             modal.classList.remove('active');
-            resetCompanyForm();
         }
     });
     
-    // Handle company form submission
-    const companyForm = document.getElementById('company-form');
-    if (companyForm) {
-        companyForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            saveCompany();
-        });
-    }
+    // Company form submission
+    document.getElementById('company-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveCompany();
+    });
 }
 
-// Open company modal
-function openCompanyModal(companyId = null) {
-    const modal = document.getElementById('company-modal');
-    const title = document.getElementById('modal-title');
-    
-    if (companyId) {
-        // Edit mode
-        const companies = JSON.parse(localStorage.getItem('companies')) || [];
-        const company = companies.find(c => c.id === parseInt(companyId));
-        
-        if (company) {
-            title.textContent = 'កែប្រែក្រុមហ៊ុន';
-            document.getElementById('modal-company-id').value = company.id;
-            document.getElementById('modal-company-name').value = company.name;
-            document.getElementById('modal-company-code').value = company.code || '';
-            document.getElementById('modal-company-contact').value = company.contact || '';
-            document.getElementById('modal-company-phone').value = company.phone || '';
-            document.getElementById('modal-company-email').value = company.email || '';
-            document.getElementById('modal-company-notes').value = company.notes || '';
-        }
-    } else {
-        // Add mode
-        title.textContent = 'បន្ថែមក្រុមហ៊ុនថ្មី';
-        resetCompanyForm();
-    }
-    
-    modal.classList.add('active');
-}
-
-// Reset company form
-function resetCompanyForm() {
-    const form = document.getElementById('company-form');
-    if (form) {
-        form.reset();
-        document.getElementById('modal-company-id').value = '';
-        const title = document.getElementById('modal-title');
-        if (title) {
-            title.textContent = 'បន្ថែមក្រុមហ៊ុនថ្មី';
-        }
-    }
-}
-
-// Save company
 function saveCompany() {
     const companyId = document.getElementById('modal-company-id').value;
     const companyName = document.getElementById('modal-company-name').value.trim();
@@ -262,9 +452,7 @@ function saveCompany() {
         contact: document.getElementById('modal-company-contact').value.trim(),
         phone: document.getElementById('modal-company-phone').value.trim(),
         email: document.getElementById('modal-company-email').value.trim(),
-        notes: document.getElementById('modal-company-notes').value.trim(),
-        createdAt: companyId ? undefined : new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date().toISOString()
     };
     
     let companies = JSON.parse(localStorage.getItem('companies')) || [];
@@ -273,7 +461,7 @@ function saveCompany() {
         // Update existing company
         const index = companies.findIndex(c => c.id === parseInt(companyId));
         if (index !== -1) {
-            companies[index] = { ...companies[index], ...company };
+            companies[index] = company;
         }
     } else {
         // Add new company
@@ -282,37 +470,29 @@ function saveCompany() {
     
     localStorage.setItem('companies', JSON.stringify(companies));
     
-    // Close modal and reset form
+    // Close modal
     document.getElementById('company-modal').classList.remove('active');
-    resetCompanyForm();
     
     // Update UI
     loadCompanies();
-    loadCompanyFilter();
     loadCompanySelect();
+    loadCompanyFilter();
+    loadTargetCompanySelect();
     
     alert(companyId ? 'ក្រុមហ៊ុនត្រូវបានកែប្រែដោយជោគជ័យ!' : 'ក្រុមហ៊ុនត្រូវបានបន្ថែមដោយជោគជ័យ!');
 }
 
-// ==============================================
-// COMPANY MANAGEMENT
-// ==============================================
-
-// Load companies for select dropdown
 function loadCompanies() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
-    const companyListBody = document.getElementById('company-list-body');
+    const tbody = document.getElementById('company-list-body');
     
-    if (!companyListBody) return;
-    
-    companyListBody.innerHTML = '';
+    tbody.innerHTML = '';
     
     if (companies.length === 0) {
-        companyListBody.innerHTML = `
+        tbody.innerHTML = `
             <tr>
-                <td colspan="4" style="text-align: center; padding: 30px; color: #6c757d;">
-                    <i class="fas fa-building" style="font-size: 2.5rem; margin-bottom: 15px; display: block; opacity: 0.5;"></i>
-                    មិនទាន់មានក្រុមហ៊ុនទេ។ សូមបន្ថែមក្រុមហ៊ុនថ្មី!
+                <td colspan="4" style="text-align: center; padding: 20px; color: #6c757d;">
+                    មិនទាន់មានក្រុមហ៊ុនទេ
                 </td>
             </tr>
         `;
@@ -330,54 +510,60 @@ function loadCompanies() {
             <td>${index + 1}</td>
             <td>
                 <strong>${company.name}</strong>
-                ${company.code ? `<br><small class="text-muted">កូដ: ${company.code}</small>` : ''}
-                ${company.contact ? `<br><small>ទំនាក់ទំនង: ${company.contact}</small>` : ''}
+                ${company.code ? `<br><small>កូដ: ${company.code}</small>` : ''}
             </td>
             <td>${itemCount} ទំនិញ</td>
             <td>
                 <div class="action-buttons">
-                    <button class="action-btn edit-btn" onclick="openCompanyModal(${company.id})">
-                        <i class="fas fa-edit"></i> កែប្រែ
+                    <button class="action-btn edit-btn" onclick="editCompany(${company.id})">
+                        <i class="fas fa-edit"></i>
                     </button>
-                    <button class="action-btn delete-btn" onclick="deleteCompany(${company.id})" ${itemCount > 0 ? 'disabled title="មិនអាចលុប ព្រោះមានទំនិញជាប់ទាក់ទង"' : ''}>
-                        <i class="fas fa-trash"></i> លុប
+                    <button class="action-btn delete-btn" onclick="deleteCompany(${company.id})" ${itemCount > 0 ? 'disabled' : ''}>
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </td>
         `;
         
-        if (itemCount > 0) {
-            row.querySelector('.delete-btn').classList.add('disabled');
-        }
-        
-        companyListBody.appendChild(row);
+        tbody.appendChild(row);
     });
 }
 
-// Delete company
+function editCompany(companyId) {
+    const companies = JSON.parse(localStorage.getItem('companies')) || [];
+    const company = companies.find(c => c.id === companyId);
+    
+    if (!company) return;
+    
+    document.getElementById('modal-title').textContent = 'កែប្រែក្រុមហ៊ុន';
+    document.getElementById('modal-company-id').value = company.id;
+    document.getElementById('modal-company-name').value = company.name;
+    document.getElementById('modal-company-code').value = company.code || '';
+    document.getElementById('modal-company-contact').value = company.contact || '';
+    document.getElementById('modal-company-phone').value = company.phone || '';
+    document.getElementById('modal-company-email').value = company.email || '';
+    
+    document.getElementById('company-modal').classList.add('active');
+}
+
 function deleteCompany(companyId) {
     if (!confirm('តើអ្នកពិតជាចង់លុបក្រុមហ៊ុននេះមែនឬទេ?')) return;
     
     let companies = JSON.parse(localStorage.getItem('companies')) || [];
-    companies = companies.filter(c => c.id !== parseInt(companyId));
+    companies = companies.filter(c => c.id !== companyId);
     
     localStorage.setItem('companies', JSON.stringify(companies));
     loadCompanies();
-    loadCompanyFilter();
     loadCompanySelect();
+    loadCompanyFilter();
+    loadTargetCompanySelect();
     
     alert('ក្រុមហ៊ុនត្រូវបានលុបដោយជោគជ័យ!');
 }
 
-// Load company select for add item form
 function loadCompanySelect() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
     const select = document.getElementById('item-company');
-    
-    if (!select) return;
-    
-    // Save current value
-    const currentValue = select.value;
     
     // Clear existing options except first one
     select.innerHTML = '<option value="">-- ជ្រើសរើសក្រុមហ៊ុន --</option>';
@@ -385,25 +571,14 @@ function loadCompanySelect() {
     companies.forEach(company => {
         const option = document.createElement('option');
         option.value = company.name;
-        option.textContent = company.name + (company.code ? ` (${company.code})` : '');
+        option.textContent = company.name;
         select.appendChild(option);
     });
-    
-    // Restore selected value if it still exists
-    if (currentValue && companies.some(c => c.name === currentValue)) {
-        select.value = currentValue;
-    }
 }
 
-// Load company filter for inventory
 function loadCompanyFilter() {
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
     const select = document.getElementById('filter-company');
-    
-    if (!select) return;
-    
-    // Save current value
-    const currentValue = select.value;
     
     // Clear existing options except "All"
     select.innerHTML = '<option value="all">ទាំងអស់</option>';
@@ -414,25 +589,14 @@ function loadCompanyFilter() {
         option.textContent = company.name;
         select.appendChild(option);
     });
-    
-    // Restore selected value
-    if (currentValue) {
-        select.value = currentValue;
-    }
 }
 
-// Load category filter for inventory
 function loadCategoryFilter() {
     const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const select = document.getElementById('filter-category');
     
-    if (!select) return;
-    
     // Get unique categories
     const categories = [...new Set(inventory.map(item => item.category).filter(Boolean))];
-    
-    // Save current value
-    const currentValue = select.value;
     
     // Clear existing options except "All"
     select.innerHTML = '<option value="all">ទាំងអស់</option>';
@@ -443,822 +607,47 @@ function loadCategoryFilter() {
         option.textContent = category;
         select.appendChild(option);
     });
-    
-    // Restore selected value
-    if (currentValue) {
-        select.value = currentValue;
-    }
 }
 
-// ==============================================
-// ADD ITEM TAB
-// ==============================================
-
-function initAddItem() {
-    const form = document.getElementById('add-item-form');
-    const resetBtn = document.getElementById('reset-form');
-    const dateInput = document.getElementById('item-date');
+function loadTargetCompanySelect() {
+    const companies = JSON.parse(localStorage.getItem('companies')) || [];
+    const select = document.getElementById('target-company');
     
-    if (!form || !resetBtn || !dateInput) return;
+    if (!select) return;
     
-    // Load company select
-    loadCompanySelect();
+    select.innerHTML = '<option value="">-- ជ្រើសរើសក្រុមហ៊ុន --</option>';
     
-    // Set today's date as default
-    const today = new Date().toISOString().split('T')[0];
-    dateInput.value = today;
-    
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const company = document.getElementById('item-company').value.trim();
-        const itemName = document.getElementById('item-name').value.trim();
-        const quantity = parseInt(document.getElementById('item-quantity').value);
-        const price = parseFloat(document.getElementById('item-price').value) || 0;
-        const date = document.getElementById('item-date').value;
-        const category = document.getElementById('item-category').value.trim();
-        const notes = document.getElementById('item-notes').value.trim();
-        
-        if (!company) {
-            alert('សូមជ្រើសរើសក្រុមហ៊ុន!');
-            return;
-        }
-        
-        if (!itemName || isNaN(quantity) || quantity < 0) {
-            alert('សូមបញ្ចូលឈ្មោះទំនិញ និងចំនួនដែលត្រឹមត្រូវ!');
-            return;
-        }
-        
-        const item = {
-            id: Date.now(),
-            company: company,
-            name: itemName,
-            quantity: quantity,
-            price: price,
-            date: date,
-            category: category,
-            notes: notes,
-            addedDate: new Date().toISOString()
-        };
-        
-        // Get existing inventory
-        const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-        inventory.push(item);
-        
-        // Save to localStorage
-        localStorage.setItem('inventory', JSON.stringify(inventory));
-        
-        // Update UI
-        addRecentItem(item);
-        updateStats();
-        loadCategoryFilter();
-        
-        // Reset form
-        form.reset();
-        dateInput.value = today;
-        
-        alert('ទំនិញត្រូវបានបន្ថែមដោយជោគជ័យ!');
-        
-        // Switch to inventory tab
-        const inventoryTab = document.querySelector('[data-tab="inventory"]');
-        if (inventoryTab) {
-            inventoryTab.click();
-        }
-    });
-    
-    resetBtn.addEventListener('click', () => {
-        form.reset();
-        dateInput.value = today;
+    companies.forEach(company => {
+        const option = document.createElement('option');
+        option.value = company.name;
+        option.textContent = company.name;
+        select.appendChild(option);
     });
 }
 
 // ==============================================
-// INVENTORY MANAGEMENT
+// UTILITY FUNCTIONS
 // ==============================================
 
-function initInventory() {
-    // Export to Excel
-    const exportExcelBtn = document.getElementById('export-excel');
-    if (exportExcelBtn) {
-        exportExcelBtn.addEventListener('click', exportToExcel);
-    }
-    
-    // Print inventory
-    const printInventoryBtn = document.getElementById('print-inventory');
-    if (printInventoryBtn) {
-        printInventoryBtn.addEventListener('click', printInventory);
-    }
-    
-    // Delete all items
-    const deleteAllBtn = document.getElementById('delete-all');
-    if (deleteAllBtn) {
-        deleteAllBtn.addEventListener('click', () => {
-            if (confirm('តើអ្នកពិតជាចង់លុបទំនិញទាំងអស់មែនឬទេ?')) {
-                localStorage.removeItem('inventory');
-                loadInventory();
-                updateStats();
-                loadCategoryFilter();
-                alert('ទំនិញទាំងអស់ត្រូវបានលុបដោយជោគជ័យ!');
-            }
-        });
-    }
-    
-    // Clear filters
-    const clearFiltersBtn = document.getElementById('clear-filters');
-    if (clearFiltersBtn) {
-        clearFiltersBtn.addEventListener('click', () => {
-            document.getElementById('filter-company').value = 'all';
-            document.getElementById('filter-category').value = 'all';
-            document.getElementById('filter-stock').value = 'all';
-            document.getElementById('search-items').value = '';
-            document.getElementById('sort-by').value = 'date-desc';
-            loadInventory();
-        });
-    }
-    
-    // Initialize filters event listeners
-    initFilters();
-    
-    // Initialize table sorting
-    initTableSorting();
-}
-
-// Initialize filters
-function initFilters() {
-    const filterCompany = document.getElementById('filter-company');
-    const filterCategory = document.getElementById('filter-category');
-    const filterStock = document.getElementById('filter-stock');
-    const sortBy = document.getElementById('sort-by');
-    const searchItems = document.getElementById('search-items');
-    
-    // Add event listeners for filters
-    [filterCompany, filterCategory, filterStock, sortBy].forEach(filter => {
-        if (filter) {
-            filter.addEventListener('change', () => {
-                loadInventory();
-            });
-        }
-    });
-    
-    // Add debounced search
-    if (searchItems) {
-        let searchTimeout;
-        searchItems.addEventListener('input', () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                loadInventory();
-            }, 300);
-        });
-    }
-}
-
-// Initialize table sorting
-function initTableSorting() {
-    const headers = document.querySelectorAll('#inventory-table th[data-sort]');
-    
-    headers.forEach(header => {
-        header.addEventListener('click', () => {
-            const sortKey = header.getAttribute('data-sort');
-            const currentSort = document.getElementById('sort-by').value;
-            let newSort;
-            
-            // Determine new sort direction
-            if (currentSort.startsWith(sortKey)) {
-                newSort = currentSort.endsWith('-asc') ? `${sortKey}-desc` : `${sortKey}-asc`;
-            } else {
-                newSort = `${sortKey}-asc`;
-            }
-            
-            document.getElementById('sort-by').value = newSort;
-            loadInventory();
-        });
-    });
-}
-
-// Load inventory from localStorage with filters
-function loadInventory() {
-    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const tbody = document.getElementById('inventory-list');
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    const lowStockThreshold = settings.lowStockThreshold || 5;
-    
-    if (!tbody) return;
-    
-    // Apply filters
-    const filterCompany = document.getElementById('filter-company')?.value || 'all';
-    const filterCategory = document.getElementById('filter-category')?.value || 'all';
-    const filterStock = document.getElementById('filter-stock')?.value || 'all';
-    const searchTerm = document.getElementById('search-items')?.value.toLowerCase() || '';
-    const sortBy = document.getElementById('sort-by')?.value || 'date-desc';
-    
-    // Filter by company
-    if (filterCompany !== 'all') {
-        inventory = inventory.filter(item => item.company === filterCompany);
-    }
-    
-    // Filter by category
-    if (filterCategory !== 'all') {
-        inventory = inventory.filter(item => item.category === filterCategory);
-    }
-    
-    // Filter by stock status
-    if (filterStock !== 'all') {
-        switch(filterStock) {
-            case 'in-stock':
-                inventory = inventory.filter(item => item.quantity > lowStockThreshold);
-                break;
-            case 'out-of-stock':
-                inventory = inventory.filter(item => item.quantity === 0);
-                break;
-            case 'low-stock':
-                inventory = inventory.filter(item => item.quantity > 0 && item.quantity <= lowStockThreshold);
-                break;
-        }
-    }
-    
-    // Search filter
-    if (searchTerm) {
-        inventory = inventory.filter(item => 
-            item.name.toLowerCase().includes(searchTerm) ||
-            item.company.toLowerCase().includes(searchTerm) ||
-            (item.category && item.category.toLowerCase().includes(searchTerm)) ||
-            (item.notes && item.notes.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Sort inventory
-    inventory.sort((a, b) => {
-        switch(sortBy) {
-            case 'date-desc':
-                return new Date(b.date) - new Date(a.date);
-            case 'date-asc':
-                return new Date(a.date) - new Date(b.date);
-            case 'name-asc':
-                return a.name.localeCompare(b.name);
-            case 'name-desc':
-                return b.name.localeCompare(a.name);
-            case 'quantity-asc':
-                return a.quantity - b.quantity;
-            case 'quantity-desc':
-                return b.quantity - a.quantity;
-            case 'price-asc':
-                return a.price - b.price;
-            case 'price-desc':
-                return b.price - a.price;
-            case 'company-asc':
-                return (a.company || '').localeCompare(b.company || '');
-            case 'company-desc':
-                return (b.company || '').localeCompare(a.company || '');
-            default:
-                return new Date(b.date) - new Date(a.date);
-        }
-    });
-    
-    // Clear table
-    tbody.innerHTML = '';
-    
-    if (inventory.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7" style="text-align: center; padding: 50px; color: #6c757d;">
-                    <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 20px; display: block; opacity: 0.5;"></i>
-                    <h3 style="margin-bottom: 10px;">មិនមានទំនិញតាមលក្ខខណ្ឌដែលបានជ្រើសរើស</h3>
-                    <p>សូមផ្លាស់ប្តូរតម្រង ឬបន្ថែមទំនិញថ្មី។</p>
-                </td>
-            </tr>
-        `;
-        updateShowingCount(0, 0);
-        return;
-    }
-    
-    // Get currency from settings
-    const currency = settings.currency || '$';
-    
-    // Populate table
-    inventory.forEach((item, index) => {
-        const row = document.createElement('tr');
-        
-        // Add class for stock status
-        if (item.quantity === 0) {
-            row.classList.add('out-of-stock');
-        } else if (item.quantity <= lowStockThreshold) {
-            row.classList.add('low-stock');
-        }
-        
-        // Format date
-        const formattedDate = formatDate(item.date, settings.dateFormat);
-        
-        // Format price with currency
-        const formattedPrice = formatPrice(item.price, currency);
-        
-        row.innerHTML = `
-            <td><strong>${item.company}</strong></td>
-            <td>
-                <div style="font-weight: 600; color: #1e3c72;">${item.name}</div>
-                ${item.notes ? `<small style="color: #6c757d; font-size: 0.85rem;">${item.notes}</small>` : ''}
-            </td>
-            <td>${item.category || '-'}</td>
-            <td>
-                <span class="quantity-badge">${item.quantity}</span>
-                ${item.quantity === 0 ? '<span class="stock-status out-of-stock-status">អស់ស្តុក</span>' : 
-                  item.quantity <= lowStockThreshold ? '<span class="stock-status low-stock-status">ស្តុកទាប</span>' : 
-                  '<span class="stock-status in-stock-status">មានស្តុក</span>'}
-            </td>
-            <td style="font-weight: 600; color: #28a745;">${formattedPrice}</td>
-            <td>${formattedDate}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="action-btn edit-btn" onclick="editItem(${item.id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn delete-btn" onclick="deleteItem(${item.id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        
-        tbody.appendChild(row);
-    });
-    
-    // Update showing count
-    updateShowingCount(inventory.length, JSON.parse(localStorage.getItem('inventory') || '[]').length);
-    
-    // Update company summary
-    updateCompanySummary();
-}
-
-// Update showing count
-function updateShowingCount(showing, total) {
-    const showingCount = document.getElementById('showing-count');
-    const totalCount = document.getElementById('total-count');
-    
-    if (showingCount) showingCount.textContent = showing;
-    if (totalCount) totalCount.textContent = total;
-}
-
-// Update company summary
-function updateCompanySummary() {
-    const filterCompany = document.getElementById('filter-company')?.value || 'all';
-    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    const currency = settings.currency || '$';
-    
-    let summary = '';
-    
-    if (filterCompany === 'all') {
-        // Show summary for all companies
-        const companies = JSON.parse(localStorage.getItem('companies')) || [];
-        const companyCount = companies.length;
-        const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        
-        summary = `${companyCount} ក្រុមហ៊ុន • តម្លៃសរុប: ${formatPrice(totalValue, currency)}`;
-    } else {
-        // Show summary for selected company
-        const companyItems = inventory.filter(item => item.company === filterCompany);
-        const itemCount = companyItems.length;
-        const totalValue = companyItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        
-        summary = `${itemCount} ទំនិញ • តម្លៃសរុប: ${formatPrice(totalValue, currency)}`;
-    }
-    
-    const companySummary = document.getElementById('company-summary');
-    if (companySummary) {
-        companySummary.textContent = summary;
-    }
-}
-
-// Delete item
-function deleteItem(itemId) {
-    if (!confirm('តើអ្នកពិតជាចង់លុបទំនិញនេះមែនឬទេ?')) return;
-    
-    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    inventory = inventory.filter(item => item.id !== itemId);
-    
-    localStorage.setItem('inventory', JSON.stringify(inventory));
-    loadInventory();
-    updateStats();
-    loadCategoryFilter();
-}
-
-// Edit item
-function editItem(itemId) {
-    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const item = inventory.find(i => i.id === itemId);
-    
-    if (!item) return;
-    
-    // Switch to add item tab
-    const addItemTab = document.querySelector('[data-tab="add-item"]');
-    if (addItemTab) {
-        addItemTab.click();
-    }
-    
-    // Load companies first
-    loadCompanySelect();
-    
-    // Fill form with item data
-    setTimeout(() => {
-        document.getElementById('item-company').value = item.company;
-        document.getElementById('item-name').value = item.name;
-        document.getElementById('item-quantity').value = item.quantity;
-        document.getElementById('item-price').value = item.price;
-        document.getElementById('item-date').value = item.date;
-        document.getElementById('item-category').value = item.category || '';
-        document.getElementById('item-notes').value = item.notes || '';
-        
-        // Update form to edit mode
-        const form = document.getElementById('add-item-form');
-        const submitBtn = form.querySelector('button[type="submit"]');
-        
-        // Change submit button text
-        submitBtn.innerHTML = '<i class="fas fa-edit"></i> កែប្រែទំនិញ';
-        
-        // Remove previous edit listener if exists
-        const existingHandler = form._editHandler;
-        if (existingHandler) {
-            form.removeEventListener('submit', existingHandler);
-        }
-        
-        // Add edit listener
-        function handleEditSubmit(e) {
-            e.preventDefault();
-            
-            item.company = document.getElementById('item-company').value.trim();
-            item.name = document.getElementById('item-name').value.trim();
-            item.quantity = parseInt(document.getElementById('item-quantity').value);
-            item.price = parseFloat(document.getElementById('item-price').value) || 0;
-            item.date = document.getElementById('item-date').value;
-            item.category = document.getElementById('item-category').value.trim();
-            item.notes = document.getElementById('item-notes').value.trim();
-            
-            localStorage.setItem('inventory', JSON.stringify(inventory));
-            
-            // Reset form
-            form.reset();
-            document.getElementById('item-date').value = new Date().toISOString().split('T')[0];
-            submitBtn.innerHTML = '<i class="fas fa-save"></i> រក្សាទុកទំនិញ';
-            
-            // Remove edit listener
-            form.removeEventListener('submit', handleEditSubmit);
-            form._editHandler = null;
-            
-            loadInventory();
-            updateStats();
-            loadCategoryFilter();
-            alert('ទំនិញត្រូវបានកែប្រែដោយជោគជ័យ!');
-            
-            // Switch to inventory tab
-            const inventoryTab = document.querySelector('[data-tab="inventory"]');
-            if (inventoryTab) {
-                inventoryTab.click();
-            }
-        }
-        
-        form._editHandler = handleEditSubmit;
-        form.addEventListener('submit', handleEditSubmit);
-    }, 100);
-}
-
-// ==============================================
-// SETTINGS MANAGEMENT
-// ==============================================
-
-// Initialize Settings Tabs
-function initSettingsTabs() {
-    const settingsTabButtons = document.querySelectorAll('.settings-tab-btn');
-    const settingsPanes = document.querySelectorAll('.settings-pane');
-    
-    settingsTabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const settingsId = button.getAttribute('data-settings');
-            
-            // Update active tab button
-            settingsTabButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            
-            // Show active tab pane
-            settingsPanes.forEach(pane => pane.classList.remove('active'));
-            const targetPane = document.getElementById(settingsId + '-settings');
-            if (targetPane) {
-                targetPane.classList.add('active');
-            }
-        });
-    });
-    
-    // Initialize settings forms
-    initSettingsForms();
-}
-
-// Initialize settings forms
-function initSettingsForms() {
-    // Main company form
-    const mainCompanyForm = document.getElementById('main-company-form');
-    if (mainCompanyForm) {
-        mainCompanyForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            saveMainCompanySettings();
-        });
-    }
-    
-    // OCR settings form
-    const ocrSettingsForm = document.getElementById('ocr-settings-form');
-    if (ocrSettingsForm) {
-        ocrSettingsForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            saveOCRSettings();
-        });
-        
-        // Update confidence value display
-        const confidenceSlider = document.getElementById('ocr-confidence');
-        const confidenceValue = document.getElementById('confidence-value');
-        
-        if (confidenceSlider && confidenceValue) {
-            confidenceSlider.addEventListener('input', function() {
-                confidenceValue.textContent = this.value + '%';
-            });
-        }
-    }
-    
-    // Performance settings form
-    const performanceForm = document.getElementById('performance-form');
-    if (performanceForm) {
-        performanceForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            savePerformanceSettings();
-        });
-    }
-    
-    // Data management buttons
-    initDataManagement();
-}
-
-// Save main company settings
-function saveMainCompanySettings() {
-    const companyName = document.getElementById('main-company-name').value.trim();
-    
-    if (!companyName) {
-        alert('សូមបញ្ចូលឈ្មោះក្រុមហ៊ុនសំខាន់!');
-        return;
-    }
-    
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    settings.companyName = companyName;
-    settings.address = document.getElementById('main-company-address').value.trim();
-    settings.phone = document.getElementById('main-company-phone').value.trim();
-    
-    localStorage.setItem('settings', JSON.stringify(settings));
-    
-    // Update company name display
-    document.getElementById('company-name-display').textContent = companyName;
-    
-    alert('ការកំណត់ក្រុមហ៊ុនត្រូវបានរក្សាទុក!');
-}
-
-// Save OCR Settings
-function saveOCRSettings() {
-    const settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-    
-    settings.defaultLanguage = document.getElementById('default-ocr-language').value;
-    settings.confidence = parseInt(document.getElementById('ocr-confidence').value);
-    settings.autoDetectItems = document.getElementById('auto-detect-items').checked;
-    settings.pricePatterns = document.getElementById('price-patterns').value;
-    settings.quantityPatterns = document.getElementById('quantity-patterns').value;
-    
-    localStorage.setItem('ocrSettings', JSON.stringify(settings));
-    alert('ការកំណត់ OCR ត្រូវបានរក្សាទុក!');
-}
-
-// Save performance settings
-function savePerformanceSettings() {
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    settings.itemsPerPage = parseInt(document.getElementById('items-per-page').value) || 50;
-    settings.performanceMode = document.getElementById('performance-mode').value;
-    settings.autoOptimize = document.getElementById('auto-optimize').checked;
-    settings.cacheData = document.getElementById('cache-data').checked;
-    settings.batchSize = parseInt(document.getElementById('batch-size').value) || 100;
-    
-    localStorage.setItem('settings', JSON.stringify(settings));
-    alert('ការកំណត់ប្រតិបត្តិការត្រូវបានរក្សាទុក!');
-}
-
-// Initialize data management
-function initDataManagement() {
-    // Backup data button
-    const backupDataBtn = document.getElementById('backup-data-btn');
-    if (backupDataBtn) {
-        backupDataBtn.addEventListener('click', backupData);
-    }
-    
-    // Export buttons
-    const exportJsonBtn = document.getElementById('export-json-btn');
-    if (exportJsonBtn) {
-        exportJsonBtn.addEventListener('click', () => exportData('json'));
-    }
-    
-    const exportCsvBtn = document.getElementById('export-csv-btn');
-    if (exportCsvBtn) {
-        exportCsvBtn.addEventListener('click', () => exportData('csv'));
-    }
-    
-    const exportDataExcelBtn = document.getElementById('export-data-excel-btn');
-    if (exportDataExcelBtn) {
-        exportDataExcelBtn.addEventListener('click', () => exportData('excel'));
-    }
-}
-
-// Backup data
-function backupData() {
-    const data = {
-        timestamp: new Date().toISOString(),
-        inventory: JSON.parse(localStorage.getItem('inventory') || '[]'),
-        companies: JSON.parse(localStorage.getItem('companies') || '[]'),
-        settings: JSON.parse(localStorage.getItem('settings') || '{}'),
-        ocrSettings: JSON.parse(localStorage.getItem('ocrSettings') || '{}')
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventory_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    alert('ទិន្នន័យត្រូវបានបម្រុងទុកដោយជោគជ័យ!');
-}
-
-// Export data
-function exportData(format) {
-    const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
-    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
-    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-    
-    if (inventory.length === 0 && companies.length === 0) {
-        alert('មិនទាន់មានទិន្នន័យដើម្បីនាំចេញ!');
-        return;
-    }
-    
-    let data, filename, mimeType;
-    
-    switch(format) {
-        case 'json':
-            data = { inventory, companies, settings };
-            filename = `inventory_export_${new Date().toISOString().split('T')[0]}.json`;
-            mimeType = 'application/json';
-            break;
-        case 'csv':
-            // Convert inventory to CSV
-            const headers = ['Company', 'Item', 'Category', 'Quantity', 'Price', 'Date', 'Notes'];
-            const rows = inventory.map(item => [
-                `"${item.company}"`,
-                `"${item.name}"`,
-                `"${item.category || ''}"`,
-                item.quantity,
-                item.price,
-                `"${item.date}"`,
-                `"${item.notes || ''}"`
-            ]);
-            data = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-            filename = `inventory_export_${new Date().toISOString().split('T')[0]}.csv`;
-            mimeType = 'text/csv';
-            break;
-        case 'excel':
-            exportToExcel();
-            return;
-    }
-    
-    const blob = new Blob([data], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    alert(`ទិន្នន័យត្រូវបាននាំចេញជា ${format.toUpperCase()} ដោយជោគជ័យ!`);
-}
-
-// Load settings from localStorage
-function loadSettings() {
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    // Main company settings
-    const mainCompanyName = document.getElementById('main-company-name');
-    if (mainCompanyName) mainCompanyName.value = settings.companyName || '';
-    
-    const mainCompanyAddress = document.getElementById('main-company-address');
-    if (mainCompanyAddress) mainCompanyAddress.value = settings.address || '';
-    
-    const mainCompanyPhone = document.getElementById('main-company-phone');
-    if (mainCompanyPhone) mainCompanyPhone.value = settings.phone || '';
-    
-    // Update company name display
-    const companyNameDisplay = document.getElementById('company-name-display');
-    if (companyNameDisplay) {
-        companyNameDisplay.textContent = settings.companyName || 'ក្រុមហ៊ុនរបស់អ្នក';
-    }
-    
-    // Load OCR settings
-    loadOCRSettings();
-    
-    // Load performance settings
-    const itemsPerPage = document.getElementById('items-per-page');
-    if (itemsPerPage) itemsPerPage.value = settings.itemsPerPage || 50;
-    
-    const performanceMode = document.getElementById('performance-mode');
-    if (performanceMode) performanceMode.value = settings.performanceMode || 'normal';
-    
-    const autoOptimize = document.getElementById('auto-optimize');
-    if (autoOptimize) autoOptimize.checked = settings.autoOptimize !== false;
-    
-    const cacheData = document.getElementById('cache-data');
-    if (cacheData) cacheData.checked = settings.cacheData !== false;
-    
-    const batchSize = document.getElementById('batch-size');
-    if (batchSize) batchSize.value = settings.batchSize || 100;
-}
-
-// Load OCR Settings to Form
-function loadOCRSettings() {
-    let settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-    
-    // Set defaults
-    if (!settings.defaultLanguage) settings.defaultLanguage = 'khm';
-    if (!settings.confidence) settings.confidence = 70;
-    if (!settings.autoDetectItems) settings.autoDetectItems = true;
-    if (!settings.pricePatterns) settings.pricePatterns = 'USD\\s*(\\d+\\.?\\d*)|\\$\\s*(\\d+\\.?\\d*)|៛\\s*(\\d+\\.?\\d*)';
-    if (!settings.quantityPatterns) settings.quantityPatterns = 'QTY\\s*(\\d+)|Quantity\\s*(\\d+)|ចំនួន\\s*(\\d+)|បរិមាណ\\s*(\\d+)';
-    
-    // Update form if exists
-    const defaultLanguage = document.getElementById('default-ocr-language');
-    if (defaultLanguage) defaultLanguage.value = settings.defaultLanguage;
-    
-    const ocrConfidence = document.getElementById('ocr-confidence');
-    if (ocrConfidence) ocrConfidence.value = settings.confidence;
-    
-    const confidenceValue = document.getElementById('confidence-value');
-    if (confidenceValue) confidenceValue.textContent = settings.confidence + '%';
-    
-    const autoDetectItems = document.getElementById('auto-detect-items');
-    if (autoDetectItems) autoDetectItems.checked = settings.autoDetectItems;
-    
-    const pricePatterns = document.getElementById('price-patterns');
-    if (pricePatterns) pricePatterns.value = settings.pricePatterns;
-    
-    const quantityPatterns = document.getElementById('quantity-patterns');
-    if (quantityPatterns) quantityPatterns.value = settings.quantityPatterns;
-    
-    localStorage.setItem('ocrSettings', JSON.stringify(settings));
-}
-
-// ==============================================
-// STATISTICS AND DATA DISPLAY
-// ==============================================
-
-// Update statistics
 function updateStats() {
     const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const companies = JSON.parse(localStorage.getItem('companies')) || [];
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    const lowStockThreshold = settings.lowStockThreshold || 5;
-    const currency = settings.currency || '$';
     
     const totalItems = inventory.length;
     const outOfStock = inventory.filter(item => item.quantity === 0).length;
     const totalCompanies = companies.length;
-    const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
-    const totalItemsEl = document.getElementById('total-items');
-    if (totalItemsEl) totalItemsEl.textContent = totalItems;
-    
-    const outOfStockEl = document.getElementById('out-of-stock');
-    if (outOfStockEl) outOfStockEl.textContent = outOfStock;
-    
-    const totalCompaniesEl = document.getElementById('total-companies');
-    if (totalCompaniesEl) totalCompaniesEl.textContent = totalCompanies;
-    
-    const totalValueEl = document.getElementById('total-value');
-    if (totalValueEl) totalValueEl.textContent = formatPrice(totalValue, currency);
+    document.getElementById('total-items').textContent = totalItems;
+    document.getElementById('out-of-stock').textContent = outOfStock;
+    document.getElementById('total-companies').textContent = totalCompanies;
     
     // Update recent items
     updateRecentItems();
 }
 
-// Add recent item display
 function addRecentItem(item) {
     const recentItemsDiv = document.getElementById('recent-items');
-    if (!recentItemsDiv) return;
-    
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    const formattedDate = formatDate(item.date, settings.dateFormat);
-    const currency = settings.currency || '$';
+    const formattedDate = formatDate(item.date);
     
     const itemDiv = document.createElement('div');
     itemDiv.className = 'recent-item';
@@ -1273,32 +662,27 @@ function addRecentItem(item) {
             </span>
         </div>
         ${item.category ? `<p><i class="fas fa-tag"></i> ${item.category}</p>` : ''}
-        <p><i class="fas fa-money-bill-wave"></i> ${formatPrice(item.price, currency)}</p>
+        <p><i class="fas fa-money-bill-wave"></i> $${item.price.toFixed(2)}</p>
         <p><i class="fas fa-calendar"></i> ${formattedDate}</p>
-        <small>បានបន្ថែម: ${new Date(item.addedDate).toLocaleString('km-KH')}</small>
     `;
     
     recentItemsDiv.insertBefore(itemDiv, recentItemsDiv.firstChild);
     
-    // Keep only last 6 items
+    // Keep only last 5 items
     const items = recentItemsDiv.querySelectorAll('.recent-item');
-    if (items.length > 6) {
+    if (items.length > 5) {
         recentItemsDiv.removeChild(items[items.length - 1]);
     }
 }
 
 function updateRecentItems() {
     const recentItemsDiv = document.getElementById('recent-items');
-    if (!recentItemsDiv) return;
-    
     const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    const currency = settings.currency || '$';
     
     recentItemsDiv.innerHTML = '';
     
-    // Show last 6 items
-    const recentItems = inventory.slice(-6).reverse();
+    // Show last 5 items
+    const recentItems = inventory.slice(-5).reverse();
     
     if (recentItems.length === 0) {
         recentItemsDiv.innerHTML = `
@@ -1311,7 +695,7 @@ function updateRecentItems() {
     }
     
     recentItems.forEach(item => {
-        const formattedDate = formatDate(item.date, settings.dateFormat);
+        const formattedDate = formatDate(item.date);
         const itemDiv = document.createElement('div');
         itemDiv.className = 'recent-item';
         itemDiv.innerHTML = `
@@ -1325,42 +709,26 @@ function updateRecentItems() {
                 </span>
             </div>
             ${item.category ? `<p><i class="fas fa-tag"></i> ${item.category}</p>` : ''}
-            <p><i class="fas fa-money-bill-wave"></i> ${formatPrice(item.price, currency)}</p>
+            <p><i class="fas fa-money-bill-wave"></i> $${item.price.toFixed(2)}</p>
             <p><i class="fas fa-calendar"></i> ${formattedDate}</p>
-            <small>បានបន្ថែម: ${new Date(item.addedDate).toLocaleString('km-KH')}</small>
         `;
         recentItemsDiv.appendChild(itemDiv);
     });
 }
 
-// Update data statistics
-function updateDataStats() {
-    const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
-    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
-    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-    const ocrSettings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-    
-    const inventorySize = JSON.stringify(inventory).length;
-    const companiesSize = JSON.stringify(companies).length;
-    const settingsSize = JSON.stringify(settings).length;
-    const ocrSettingsSize = JSON.stringify(ocrSettings).length;
-    const totalSize = ((inventorySize + companiesSize + settingsSize + ocrSettingsSize) / 1024).toFixed(2);
-    
-    const dataTotalItems = document.getElementById('data-total-items');
-    if (dataTotalItems) dataTotalItems.textContent = inventory.length;
-    
-    const dataSize = document.getElementById('data-size');
-    if (dataSize) dataSize.textContent = `${totalSize} KB`;
-    
-    const dataTotalCompanies = document.getElementById('data-total-companies');
-    if (dataTotalCompanies) dataTotalCompanies.textContent = companies.length;
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
 }
 
 // ==============================================
-// EXPORT FUNCTIONS
+// EXPORT/IMPORT FUNCTIONS
 // ==============================================
 
-// Export to Excel
 function exportToExcel() {
     let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const settings = JSON.parse(localStorage.getItem('settings')) || {};
@@ -1371,127 +739,24 @@ function exportToExcel() {
         return;
     }
     
-    // Apply current filters
-    const filterCompany = document.getElementById('filter-company')?.value || 'all';
-    const filterCategory = document.getElementById('filter-category')?.value || 'all';
-    const filterStock = document.getElementById('filter-stock')?.value || 'all';
-    const searchTerm = document.getElementById('search-items')?.value.toLowerCase() || '';
-    const lowStockThreshold = settings.lowStockThreshold || 5;
-    
-    if (filterCompany !== 'all') {
-        inventory = inventory.filter(item => item.company === filterCompany);
-    }
-    
-    if (filterCategory !== 'all') {
-        inventory = inventory.filter(item => item.category === filterCategory);
-    }
-    
-    if (filterStock !== 'all') {
-        switch(filterStock) {
-            case 'in-stock':
-                inventory = inventory.filter(item => item.quantity > lowStockThreshold);
-                break;
-            case 'out-of-stock':
-                inventory = inventory.filter(item => item.quantity === 0);
-                break;
-            case 'low-stock':
-                inventory = inventory.filter(item => item.quantity > 0 && item.quantity <= lowStockThreshold);
-                break;
-        }
-    }
-    
-    if (searchTerm) {
-        inventory = inventory.filter(item => 
-            item.name.toLowerCase().includes(searchTerm) ||
-            item.company.toLowerCase().includes(searchTerm) ||
-            (item.category && item.category.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Get currency
-    const currency = settings.currency || '$';
-    
     // Prepare data for Excel
     const excelData = [
-        // Header
-        ['ល.រ', 'ក្រុមហ៊ុន', 'ទំនិញ', 'ប្រភេទ', 'ចំនួន', 'តម្លៃ', 'កាលបរិច្ឆេទ', 'កំណត់ចំណាំ', 'ស្ថានភាពស្តុក'],
-        // Data rows
-        ...inventory.map((item, index) => {
-            let stockStatus = 'មានស្តុក';
-            if (item.quantity === 0) {
-                stockStatus = 'អស់ស្តុក';
-            } else if (item.quantity <= lowStockThreshold) {
-                stockStatus = 'ស្តុកទាប';
-            }
-            
-            return [
-                index + 1,
-                item.company,
-                item.name,
-                item.category || '-',
-                item.quantity,
-                formatPrice(item.price, currency),
-                formatDate(item.date, settings.dateFormat),
-                item.notes || '-',
-                stockStatus
-            ];
-        })
+        ['ល.រ', 'ក្រុមហ៊ុន', 'ទំនិញ', 'ប្រភេទ', 'ចំនួន', 'តម្លៃ', 'កាលបរិច្ឆេទ', 'កំណត់ចំណាំ'],
+        ...inventory.map((item, index) => [
+            index + 1,
+            item.company,
+            item.name,
+            item.category || '-',
+            item.quantity,
+            `$${item.price.toFixed(2)}`,
+            formatDate(item.date),
+            item.notes || '-'
+        ])
     ];
-    
-    // Add summary row
-    const totalItems = inventory.length;
-    const totalQuantity = inventory.reduce((sum, item) => sum + item.quantity, 0);
-    const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    excelData.push(['']); // Empty row
-    excelData.push(['សរុប:', '', '', '', totalQuantity, formatPrice(totalValue, currency), '', '', `${totalItems} ទំនិញ`]);
     
     // Create workbook
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(excelData);
-    
-    // Set column widths
-    const wscols = [
-        {wch: 5},   // No.
-        {wch: 20},  // Company
-        {wch: 30},  // Item name
-        {wch: 15},  // Category
-        {wch: 10},  // Quantity
-        {wch: 12},  // Price
-        {wch: 15},  // Date
-        {wch: 25},  // Notes
-        {wch: 12}   // Stock status
-    ];
-    ws['!cols'] = wscols;
-    
-    // Add company info sheet
-    if (companies.length > 0) {
-        const companyData = [
-            ['ល.រ', 'ឈ្មោះក្រុមហ៊ុន', 'កូដ', 'ទំនាក់ទំនង', 'លេខទូរស័ព្ទ', 'អ៊ីមែល', 'កំណត់ចំណាំ'],
-            ...companies.map((company, index) => [
-                index + 1,
-                company.name,
-                company.code || '-',
-                company.contact || '-',
-                company.phone || '-',
-                company.email || '-',
-                company.notes || '-'
-            ])
-        ];
-        
-        const wsCompanies = XLSX.utils.aoa_to_sheet(companyData);
-        wsCompanies['!cols'] = [
-            {wch: 5},   // No.
-            {wch: 25},  // Company name
-            {wch: 10},  // Code
-            {wch: 20},  // Contact
-            {wch: 15},  // Phone
-            {wch: 25},  // Email
-            {wch: 30}   // Notes
-        ];
-        
-        XLSX.utils.book_append_sheet(wb, wsCompanies, 'ក្រុមហ៊ុន');
-    }
     
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'ទំនិញ');
@@ -1505,183 +770,32 @@ function exportToExcel() {
     XLSX.writeFile(wb, filename);
 }
 
-// Print inventory
 function printInventory() {
-    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
     const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    const companies = JSON.parse(localStorage.getItem('companies')) || [];
     
-    // Apply current filters
-    const filterCompany = document.getElementById('filter-company')?.value || 'all';
-    const filterCategory = document.getElementById('filter-category')?.value || 'all';
-    const filterStock = document.getElementById('filter-stock')?.value || 'all';
-    const searchTerm = document.getElementById('search-items')?.value.toLowerCase() || '';
-    const lowStockThreshold = settings.lowStockThreshold || 5;
-    
-    if (filterCompany !== 'all') {
-        inventory = inventory.filter(item => item.company === filterCompany);
-    }
-    
-    if (filterCategory !== 'all') {
-        inventory = inventory.filter(item => item.category === filterCategory);
-    }
-    
-    if (filterStock !== 'all') {
-        switch(filterStock) {
-            case 'in-stock':
-                inventory = inventory.filter(item => item.quantity > lowStockThreshold);
-                break;
-            case 'out-of-stock':
-                inventory = inventory.filter(item => item.quantity === 0);
-                break;
-            case 'low-stock':
-                inventory = inventory.filter(item => item.quantity > 0 && item.quantity <= lowStockThreshold);
-                break;
-        }
-    }
-    
-    if (searchTerm) {
-        inventory = inventory.filter(item => 
-            item.name.toLowerCase().includes(searchTerm) ||
-            item.company.toLowerCase().includes(searchTerm) ||
-            (item.category && item.category.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Get currency
-    const currency = settings.currency || '$';
-    
-    const printContent = document.getElementById('print-content');
-    if (!printContent) return;
-    
-    // Build printable HTML
     let html = `
         <style>
             @media print {
-                @page {
-                    margin: 0.5in;
-                }
-                body {
-                    font-family: 'Khmer OS', 'Arial Unicode MS', Arial, sans-serif;
-                    font-size: 12pt;
-                    line-height: 1.5;
-                }
-                .print-header {
-                    text-align: center;
-                    margin-bottom: 30px;
-                    border-bottom: 3px double #000;
-                    padding-bottom: 20px;
-                }
-                .company-name {
-                    font-size: 24pt;
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                    color: #1e3c72;
-                }
-                .company-info {
-                    font-size: 11pt;
-                    color: #666;
-                    margin-bottom: 5px;
-                }
-                .report-title {
-                    font-size: 18pt;
-                    margin: 25px 0;
-                    text-align: center;
-                    font-weight: bold;
-                }
-                .filter-info {
-                    background: #f5f5f5;
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin-bottom: 20px;
-                    font-size: 10pt;
-                }
-                .inventory-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-bottom: 30px;
-                }
-                .inventory-table th {
-                    background: #2c3e50;
-                    color: white;
-                    padding: 12px 8px;
-                    text-align: left;
-                    border: 1px solid #ddd;
-                    font-weight: bold;
-                }
-                .inventory-table td {
-                    padding: 10px 8px;
-                    border: 1px solid #ddd;
-                }
-                .inventory-table tr:nth-child(even) {
-                    background: #f9f9f9;
-                }
-                .quantity {
-                    text-align: center;
-                    font-weight: bold;
-                }
-                .price {
-                    text-align: right;
-                }
-                .out-of-stock {
-                    background: #ffeaea !important;
-                    color: #d00;
-                }
-                .low-stock {
-                    background: #fff3cd !important;
-                }
-                .summary {
-                    margin-top: 30px;
-                    padding: 15px;
-                    background: #f8f9fa;
-                    border-radius: 5px;
-                    font-size: 11pt;
-                }
-                .summary-item {
-                    margin-bottom: 5px;
-                }
-                .footer {
-                    margin-top: 40px;
-                    text-align: center;
-                    font-size: 10pt;
-                    color: #666;
-                    border-top: 1px solid #ddd;
-                    padding-top: 20px;
-                }
-                .page-break {
-                    page-break-before: always;
-                }
+                body { font-family: Arial, sans-serif; }
+                .print-header { text-align: center; margin-bottom: 30px; }
+                .company-name { font-size: 24pt; font-weight: bold; }
+                .report-title { font-size: 18pt; margin: 20px 0; }
+                table { width: 100%; border-collapse: collapse; }
+                th { background: #f2f2f2; padding: 10px; border: 1px solid #ddd; }
+                td { padding: 8px; border: 1px solid #ddd; }
             }
         </style>
         <div class="print-header">
             <div class="company-name">${settings.companyName || 'ក្រុមហ៊ុន'}</div>
-            <div class="company-info">${settings.address || ''}</div>
-            <div class="company-info">ទូរស័ព្ទ: ${settings.phone || ''} ${settings.email ? '| អ៊ីមែល: ' + settings.email : ''}</div>
-            <div class="company-info">កាលបរិច្ឆេទបោះពុម្ព: ${new Date().toLocaleDateString('km-KH')} ${new Date().toLocaleTimeString('km-KH')}</div>
+            <div>កាលបរិច្ឆេទបោះពុម្ព: ${new Date().toLocaleDateString('km-KH')}</div>
         </div>
         <div class="report-title">បញ្ជីទំនិញក្នុងស្តុក</div>
     `;
     
-    // Add filter info
-    let filterInfo = [];
-    if (filterCompany !== 'all') filterInfo.push(`ក្រុមហ៊ុន: ${filterCompany}`);
-    if (filterCategory !== 'all') filterInfo.push(`ប្រភេទ: ${filterCategory}`);
-    if (filterStock !== 'all') filterInfo.push(`ស្ថានភាពស្តុក: ${filterStock}`);
-    if (searchTerm) filterInfo.push(`ការស្វែងរក: "${searchTerm}"`);
-    
-    if (filterInfo.length > 0) {
-        html += `<div class="filter-info">ត្រងតាម: ${filterInfo.join(' | ')}</div>`;
-    }
-    
     if (inventory.length > 0) {
-        // Calculate totals
-        const totalQuantity = inventory.reduce((sum, item) => sum + item.quantity, 0);
-        const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const outOfStockCount = inventory.filter(item => item.quantity === 0).length;
-        const lowStockCount = inventory.filter(item => item.quantity > 0 && item.quantity <= lowStockThreshold).length;
-        
         html += `
-            <table class="inventory-table">
+            <table>
                 <thead>
                     <tr>
                         <th>ល.រ</th>
@@ -1691,33 +805,21 @@ function printInventory() {
                         <th>ចំនួន</th>
                         <th>តម្លៃ</th>
                         <th>កាលបរិច្ឆេទ</th>
-                        <th>ស្ថានភាព</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         
         inventory.forEach((item, index) => {
-            let stockStatus = 'មានស្តុក';
-            let rowClass = '';
-            if (item.quantity === 0) {
-                stockStatus = 'អស់ស្តុក';
-                rowClass = 'out-of-stock';
-            } else if (item.quantity <= lowStockThreshold) {
-                stockStatus = 'ស្តុកទាប';
-                rowClass = 'low-stock';
-            }
-            
             html += `
-                <tr class="${rowClass}">
+                <tr>
                     <td>${index + 1}</td>
                     <td>${item.company}</td>
                     <td>${item.name}</td>
                     <td>${item.category || '-'}</td>
-                    <td class="quantity">${item.quantity}</td>
-                    <td class="price">${formatPrice(item.price, currency)}</td>
-                    <td>${formatDate(item.date, settings.dateFormat)}</td>
-                    <td>${stockStatus}</td>
+                    <td>${item.quantity}</td>
+                    <td>$${item.price.toFixed(2)}</td>
+                    <td>${formatDate(item.date)}</td>
                 </tr>
             `;
         });
@@ -1725,94 +827,90 @@ function printInventory() {
         html += `
                 </tbody>
             </table>
-            <div class="summary">
-                <div class="summary-item"><strong>សរុបទំនិញ:</strong> ${inventory.length} ទំនិញ</div>
-                <div class="summary-item"><strong>សរុបចំនួន:</strong> ${totalQuantity} គ្រឿង</div>
-                <div class="summary-item"><strong>តម្លៃសរុប:</strong> ${formatPrice(totalValue, currency)}</div>
-                <div class="summary-item"><strong>អស់ស្តុក:</strong> ${outOfStockCount} ទំនិញ</div>
-                <div class="summary-item"><strong>ស្តុកទាប:</strong> ${lowStockCount} ទំនិញ</div>
-            </div>
         `;
     } else {
-        html += '<div style="text-align: center; padding: 40px; color: #666; font-size: 14pt;">មិនមានទំនិញតាមលក្ខខណ្ឌដែលបានជ្រើសរើស</div>';
+        html += '<p>មិនមានទំនិញក្នុងស្តុក</p>';
     }
     
-    html += `
-        <div class="footer">
-            <p>បង្កើតដោយ: ប្រព័ន្ធគ្រប់គ្រងស្តុកទំនិញ - ជំនាន់ក្រុមហ៊ុន</p>
-            <p>ទំព័រ 1 នៃ 1 | បានបង្កើតនៅ: ${new Date().toLocaleString('km-KH')}</p>
-        </div>
-    `;
-    
-    printContent.innerHTML = html;
-    
-    // Trigger print
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
         <!DOCTYPE html>
         <html>
-        <head>
-            <title>បោះពុម្ពបញ្ជីទំនិញ - ${settings.companyName || 'ក្រុមហ៊ុន'}</title>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body>
-            ${html}
-            <script>
-                window.onload = function() {
-                    window.print();
-                    setTimeout(function() {
-                        window.close();
-                    }, 100);
-                }
-            <\/script>
-        </body>
+        <head><title>Print Inventory</title></head>
+        <body>${html}</body>
         </html>
     `);
     printWindow.document.close();
+    printWindow.print();
 }
 
-// ==============================================
-// AUTO-BACKUP SYSTEM
-// ==============================================
-
-// Auto-backup feature
-function setupAutoBackup() {
-    // Backup every hour
-    setInterval(createAutoBackup, 60 * 60 * 1000);
+function importFromCSV() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.xlsx,.xls';
     
-    // Backup when window closes
-    window.addEventListener('beforeunload', function() {
-        createAutoBackup();
-    });
-}
-
-function createAutoBackup() {
-    const inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-    const companies = JSON.parse(localStorage.getItem('companies')) || [];
-    const settings = JSON.parse(localStorage.getItem('settings')) || {};
-    
-    const backup = {
-        timestamp: new Date().toISOString(),
-        inventory: inventory,
-        companies: companies,
-        settings: settings
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = e.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                
+                let importedItems = [];
+                jsonData.forEach((row, index) => {
+                    const item = {
+                        id: Date.now() + index,
+                        company: row.ក្រុមហ៊ុន || row.Company || '',
+                        name: row.ទំនិញ || row.Item || '',
+                        quantity: parseInt(row.ចំនួន || row.Quantity || 0),
+                        price: parseFloat(row.តម្លៃ || row.Price || 0),
+                        date: row.កាលបរិច្ឆេទ || row.Date || new Date().toISOString().split('T')[0],
+                        category: row.ប្រភេទ || row.Category || '',
+                        notes: row.កំណត់ចំណាំ || row.Notes || '',
+                        addedDate: new Date().toISOString()
+                    };
+                    
+                    if (item.name && item.company) {
+                        importedItems.push(item);
+                    }
+                });
+                
+                if (importedItems.length === 0) {
+                    alert('មិនមានទិន្នន័យត្រឹមត្រូវក្នុងឯកសារ!');
+                    return;
+                }
+                
+                // Save to localStorage
+                let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+                inventory = inventory.concat(importedItems);
+                localStorage.setItem('inventory', JSON.stringify(inventory));
+                
+                // Update UI
+                loadInventory();
+                loadCategoryFilter();
+                updateStats();
+                
+                alert(`បាននាំចូល ${importedItems.length} ទំនិញដោយជោគជ័យ!`);
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                alert('មានបញ្ហាក្នុងការនាំចូលឯកសារ: ' + error.message);
+            }
+        };
+        
+        reader.readAsBinaryString(file);
     };
     
-    // Save last 5 backups
-    let backups = JSON.parse(localStorage.getItem('backups') || '[]');
-    backups.push(backup);
-    
-    // Keep only last 5 backups
-    if (backups.length > 5) {
-        backups = backups.slice(-5);
-    }
-    
-    localStorage.setItem('backups', JSON.stringify(backups));
+    input.click();
 }
 
 // ==============================================
-// OCR INVOICE PROCESSING SYSTEM
+// OCR PROCESSOR CLASS
 // ==============================================
 
 class InvoiceOCRProcessor {
@@ -1822,40 +920,13 @@ class InvoiceOCRProcessor {
         this.ocrResults = [];
         this.parsedItems = [];
         this.isProcessing = false;
-        this.currentStep = 0;
-        this.canvas = null;
-        this.ctx = null;
-        this.selectionRect = null;
-        this.isSelecting = false;
-        this.startX = 0;
-        this.startY = 0;
-        this.worker = null;
         
-        this.initOCRProcessor();
+        this.init();
     }
     
-    initOCRProcessor() {
-        this.createCanvas();
+    init() {
         this.setupEventListeners();
-        this.loadOCRSettings();
-    }
-    
-    createCanvas() {
-        const preview = document.getElementById('image-preview');
-        if (!preview) return;
-        
-        this.canvas = document.createElement('canvas');
-        this.canvas.style.maxWidth = '100%';
-        this.canvas.style.height = 'auto';
-        this.ctx = this.canvas.getContext('2d');
-        
-        // Create selection rectangle
-        this.selectionRect = document.createElement('div');
-        this.selectionRect.className = 'selection-rectangle';
-        this.selectionRect.style.display = 'none';
-        
-        preview.appendChild(this.canvas);
-        preview.appendChild(this.selectionRect);
+        loadTargetCompanySelect();
     }
     
     setupEventListeners() {
@@ -1868,98 +939,50 @@ class InvoiceOCRProcessor {
         }
         
         if (dropArea) {
-            // Drag and drop
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            function preventDefaults(e) {
+            dropArea.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-            }
-            
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropArea.addEventListener(eventName, () => {
-                    dropArea.style.borderColor = '#2c5282';
-                    dropArea.style.background = '#ebf8ff';
-                }, false);
+                dropArea.style.background = '#e9ecef';
             });
             
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, () => {
-                    dropArea.style.borderColor = '#4a90e2';
-                    dropArea.style.background = '#f8fafc';
-                }, false);
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.style.background = '#f8fafc';
             });
             
-            dropArea.addEventListener('drop', (e) => this.handleDrop(e), false);
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.style.background = '#f8fafc';
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.match('image.*')) {
+                    this.processImageFile(file);
+                } else {
+                    alert('សូមផ្ទុកតែរូបភាពប៉ុណ្ណោះ!');
+                }
+            });
         }
         
         // OCR buttons
-        const selectAreaBtn = document.getElementById('select-area-btn');
-        if (selectAreaBtn) selectAreaBtn.addEventListener('click', () => this.startAreaSelection());
-        
-        const clearAreaBtn = document.getElementById('clear-area-btn');
-        if (clearAreaBtn) clearAreaBtn.addEventListener('click', () => this.clearSelectedAreas());
-        
-        const autoDetectBtn = document.getElementById('auto-detect-btn');
-        if (autoDetectBtn) autoDetectBtn.addEventListener('click', () => this.autoDetectItems());
-        
-        const previewOcrBtn = document.getElementById('preview-ocr-btn');
-        if (previewOcrBtn) previewOcrBtn.addEventListener('click', () => this.previewOCRResults());
-        
-        const addAllItemsBtn = document.getElementById('add-all-items-btn');
-        if (addAllItemsBtn) addAllItemsBtn.addEventListener('click', () => this.addAllItemsToInventory());
-        
-        const exportInvoiceExcelBtn = document.getElementById('export-invoice-excel-btn');
-        if (exportInvoiceExcelBtn) exportInvoiceExcelBtn.addEventListener('click', () => this.exportInvoiceToExcel());
-        
-        const clearOcrBtn = document.getElementById('clear-ocr-btn');
-        if (clearOcrBtn) clearOcrBtn.addEventListener('click', () => this.resetOCRProcess());
+        document.getElementById('select-area-btn')?.addEventListener('click', () => this.startAreaSelection());
+        document.getElementById('clear-area-btn')?.addEventListener('click', () => this.clearSelectedAreas());
+        document.getElementById('auto-detect-btn')?.addEventListener('click', () => this.autoDetectItems());
+        document.getElementById('preview-ocr-btn')?.addEventListener('click', () => this.previewOCRResults());
+        document.getElementById('add-all-items-btn')?.addEventListener('click', () => this.addAllItemsToInventory());
+        document.getElementById('export-invoice-excel-btn')?.addEventListener('click', () => this.exportInvoiceToExcel());
+        document.getElementById('clear-ocr-btn')?.addEventListener('click', () => this.resetOCRProcess());
         
         // Step navigation
-        this.setupStepNavigation();
+        this.showStep(1);
     }
     
-    setupStepNavigation() {
-        const steps = document.querySelectorAll('.ocr-step');
-        
-        // Initially show first step
-        this.showStep(0);
-        
-        // Update progress bar
-        this.updateProgressBar();
-    }
-    
-    showStep(stepIndex) {
-        document.querySelectorAll('.ocr-step').forEach((step, index) => {
-            step.classList.toggle('active', index === stepIndex);
+    showStep(stepNumber) {
+        // Hide all steps
+        document.querySelectorAll('.ocr-step').forEach(step => {
+            step.classList.remove('active');
         });
-        this.currentStep = stepIndex;
-        this.updateProgressBar();
-    }
-    
-    nextStep() {
-        if (this.currentStep < 2) {
-            this.showStep(this.currentStep + 1);
-        }
-    }
-    
-    prevStep() {
-        if (this.currentStep > 0) {
-            this.showStep(this.currentStep - 1);
-        }
-    }
-    
-    updateProgressBar() {
-        const progressBar = document.getElementById('ocr-progress-bar');
-        const progressText = document.getElementById('ocr-progress-text');
         
-        if (progressBar && progressText) {
-            const progress = ((this.currentStep + 1) / 3) * 100;
-            progressBar.style.width = `${progress}%`;
-            const stepNames = ['ការផ្ទុករូបភាព', 'ការកំណត់តំបន់', 'ការត្រួតពិនិត្យទិន្នន័យ'];
-            progressText.textContent = `ជំហាន ${this.currentStep + 1}/3: ${stepNames[this.currentStep]}`;
+        // Show current step
+        const stepElement = document.getElementById(`ocr-step-${stepNumber}`);
+        if (stepElement) {
+            stepElement.classList.add('active');
         }
     }
     
@@ -1970,17 +993,6 @@ class InvoiceOCRProcessor {
         }
     }
     
-    handleDrop(event) {
-        const dt = event.dataTransfer;
-        const file = dt.files[0];
-        
-        if (file && file.type.match('image.*')) {
-            this.processImageFile(file);
-        } else {
-            alert('សូមផ្ទុកតែរូបភាពប៉ុណ្ណោះ!');
-        }
-    }
-    
     async processImageFile(file) {
         try {
             this.showProcessing(true, 'កំពុងផ្ទុករូបភាព...');
@@ -1988,13 +1000,7 @@ class InvoiceOCRProcessor {
             const imageUrl = URL.createObjectURL(file);
             await this.loadImage(imageUrl);
             
-            // Update stats
-            const imageStats = document.getElementById('image-stats');
-            if (imageStats) {
-                imageStats.textContent = `${file.name} (${Math.round(file.size / 1024)}KB)`;
-            }
-            
-            this.nextStep();
+            this.showStep(2);
             this.showProcessing(false);
         } catch (error) {
             console.error('Error processing image:', error);
@@ -2009,17 +1015,26 @@ class InvoiceOCRProcessor {
             img.onload = () => {
                 this.currentImage = img;
                 
+                const preview = document.getElementById('image-preview');
+                preview.innerHTML = '';
+                
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
                 // Set canvas dimensions
                 const maxWidth = 800;
                 const scale = Math.min(maxWidth / img.width, 1);
-                this.canvas.width = img.width * scale;
-                this.canvas.height = img.height * scale;
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
                 
-                // Draw image on canvas
-                this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+                // Draw image
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 
-                // Add click events for area selection
-                this.setupCanvasEvents();
+                // Add to preview
+                preview.appendChild(canvas);
+                
+                // Setup canvas events for area selection
+                this.setupCanvasEvents(canvas, ctx);
                 
                 resolve();
             };
@@ -2028,85 +1043,83 @@ class InvoiceOCRProcessor {
         });
     }
     
-    setupCanvasEvents() {
-        if (!this.canvas) return;
+    setupCanvasEvents(canvas, ctx) {
+        let isSelecting = false;
+        let startX = 0;
+        let startY = 0;
+        let currentRect = null;
         
-        this.canvas.onmousedown = (e) => this.startSelection(e);
-        this.canvas.onmousemove = (e) => this.updateSelection(e);
-        this.canvas.onmouseup = () => this.endSelection();
-        
-        // Touch events for mobile
-        this.canvas.ontouchstart = (e) => this.startSelection(e.touches[0]);
-        this.canvas.ontouchmove = (e) => this.updateSelection(e.touches[0]);
-        this.canvas.ontouchend = () => this.endSelection();
-    }
-    
-    startAreaSelection() {
-        this.isSelecting = true;
-        this.canvas.style.cursor = 'crosshair';
-        alert('អូសម៉ៅស៍ដើម្បីជ្រើសរើសតំបន់ដែលមានទិន្នន័យទំនិញ។');
-    }
-    
-    startSelection(e) {
-        if (!this.isSelecting) return;
-        
-        const rect = this.canvas.getBoundingClientRect();
-        this.startX = e.clientX - rect.left;
-        this.startY = e.clientY - rect.top;
-        
-        this.selectionRect.style.left = this.startX + 'px';
-        this.selectionRect.style.top = this.startY + 'px';
-        this.selectionRect.style.width = '0px';
-        this.selectionRect.style.height = '0px';
-        this.selectionRect.style.display = 'block';
-    }
-    
-    updateSelection(e) {
-        if (!this.isSelecting || !this.startX) return;
-        
-        const rect = this.canvas.getBoundingClientRect();
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        
-        const width = currentX - this.startX;
-        const height = currentY - this.startY;
-        
-        this.selectionRect.style.width = Math.abs(width) + 'px';
-        this.selectionRect.style.height = Math.abs(height) + 'px';
-        this.selectionRect.style.left = (width > 0 ? this.startX : currentX) + 'px';
-        this.selectionRect.style.top = (height > 0 ? this.startY : currentY) + 'px';
-    }
-    
-    endSelection() {
-        if (!this.isSelecting || !this.startX) return;
-        
-        this.isSelecting = false;
-        this.canvas.style.cursor = 'default';
-        
-        const rect = this.selectionRect.getBoundingClientRect();
-        const canvasRect = this.canvas.getBoundingClientRect();
-        
-        const area = {
-            x: rect.left - canvasRect.left,
-            y: rect.top - canvasRect.top,
-            width: rect.width,
-            height: rect.height,
-            id: Date.now()
+        canvas.onmousedown = (e) => {
+            if (!isSelecting) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            
+            currentRect = {
+                x: startX,
+                y: startY,
+                width: 0,
+                height: 0
+            };
+            
+            this.drawSelectionRect(ctx, canvas, currentRect);
         };
         
-        this.selectedAreas.push(area);
-        this.updateSelectedAreasDisplay();
+        canvas.onmousemove = (e) => {
+            if (!isSelecting || !currentRect) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            currentRect.width = currentX - startX;
+            currentRect.height = currentY - startY;
+            
+            // Redraw canvas with image and selection
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(this.currentImage, 0, 0, canvas.width, canvas.height);
+            this.drawSelectionRect(ctx, canvas, currentRect);
+        };
         
-        // Hide selection rectangle
-        this.selectionRect.style.display = 'none';
-        this.startX = 0;
-        this.startY = 0;
+        canvas.onmouseup = () => {
+            if (!isSelecting || !currentRect) return;
+            
+            // Add selection to areas
+            this.selectedAreas.push({
+                ...currentRect,
+                id: Date.now()
+            });
+            
+            this.updateSelectedAreasDisplay();
+            
+            // Reset
+            currentRect = null;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(this.currentImage, 0, 0, canvas.width, canvas.height);
+        };
+        
+        this.startAreaSelection = () => {
+            isSelecting = true;
+            canvas.style.cursor = 'crosshair';
+            alert('អូសម៉ៅស៍ដើម្បីជ្រើសរើសតំបន់ដែលមានទិន្នន័យទំនិញ។');
+        };
+    }
+    
+    drawSelectionRect(ctx, canvas, rect) {
+        ctx.strokeStyle = '#4299e1';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        ctx.setLineDash([]);
+        
+        // Fill with semi-transparent color
+        ctx.fillStyle = 'rgba(66, 153, 225, 0.1)';
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     }
     
     updateSelectedAreasDisplay() {
         const container = document.getElementById('selected-areas');
-        if (!container) return;
-        
         container.innerHTML = '';
         
         this.selectedAreas.forEach((area, index) => {
@@ -2139,38 +1152,19 @@ class InvoiceOCRProcessor {
         this.showProcessing(true, 'កំពុងស្វ័យប្រវត្តិស្វែងរកទំនិញ...');
         
         try {
-            // Use Tesseract to detect text regions
-            const worker = await Tesseract.createWorker();
-            await worker.loadLanguage('eng');
-            await worker.initialize('eng');
+            // Simple auto-detect: select the whole image for now
+            const canvas = document.querySelector('#image-preview canvas');
+            this.selectedAreas = [{
+                id: Date.now(),
+                x: 0,
+                y: 0,
+                width: canvas.width,
+                height: canvas.height
+            }];
             
-            // Get text blocks
-            const { data: { blocks } } = await worker.recognize(this.canvas);
-            
-            // Filter blocks that likely contain items (based on size and position)
-            const itemBlocks = blocks.filter(block => {
-                // These heuristics can be adjusted based on your invoice format
-                const hasNumbers = /\d/.test(block.text);
-                const hasPrice = /[$៛€¥]|USD|riel|dollar/i.test(block.text);
-                const reasonableSize = block.bbox.width > 50 && block.bbox.height > 20;
-                
-                return (hasNumbers || hasPrice) && reasonableSize;
-            });
-            
-            // Convert blocks to selection areas
-            this.selectedAreas = itemBlocks.map(block => ({
-                x: block.bbox.x0,
-                y: block.bbox.y0,
-                width: block.bbox.x1 - block.bbox.x0,
-                height: block.bbox.y1 - block.bbox.y0,
-                id: Date.now() + Math.random()
-            }));
-            
-            await worker.terminate();
             this.updateSelectedAreasDisplay();
-            
             this.showProcessing(false);
-            alert(`បានស្វែងរកបាន ${this.selectedAreas.length} តំបន់ដែលអាចមានទំនិញ។`);
+            alert('បានជ្រើសរើសតំបន់សម្រាប់ OCR!');
         } catch (error) {
             console.error('Auto-detect error:', error);
             this.showProcessing(false);
@@ -2193,21 +1187,14 @@ class InvoiceOCRProcessor {
             // Get OCR language
             const language = document.getElementById('ocr-language').value;
             
-            // Create worker
-            this.worker = await Tesseract.createWorker();
-            await this.worker.loadLanguage(language);
-            await this.initializeWorker(language);
-            
             // Process each selected area
             for (let i = 0; i < this.selectedAreas.length; i++) {
                 const area = this.selectedAreas[i];
                 
-                // Update progress
-                const progress = ((i + 1) / this.selectedAreas.length) * 100;
-                this.showProcessing(true, `កំពុងដំណើរការ OCR តំបន់ ${i + 1}/${this.selectedAreas.length}...`);
-                
                 // Extract area from canvas
-                const imageData = this.ctx.getImageData(area.x, area.y, area.width, area.height);
+                const canvas = document.querySelector('#image-preview canvas');
+                const ctx = canvas.getContext('2d');
+                const imageData = ctx.getImageData(area.x, area.y, area.width, area.height);
                 
                 // Create temporary canvas for the area
                 const tempCanvas = document.createElement('canvas');
@@ -2216,31 +1203,29 @@ class InvoiceOCRProcessor {
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.putImageData(imageData, 0, 0);
                 
-                // Perform OCR on the area
-                const { data: { text, confidence } } = await this.worker.recognize(tempCanvas);
+                // Perform OCR
+                const worker = await Tesseract.createWorker();
+                await worker.loadLanguage(language);
+                await worker.initialize(language);
+                
+                const { data: { text } } = await worker.recognize(tempCanvas);
+                await worker.terminate();
                 
                 this.ocrResults.push({
                     area: area,
-                    text: text.trim(),
-                    confidence: confidence
+                    text: text.trim()
                 });
                 
-                // Parse items from the text
+                // Parse items from text
                 const items = this.parseItemsFromText(text);
                 this.parsedItems.push(...items);
             }
             
-            // Terminate worker
-            await this.worker.terminate();
-            this.worker = null;
-            
             // Display results
             this.displayOCRResults();
             this.displayParsedItems();
-            this.updateStats();
             
-            // Move to next step
-            this.nextStep();
+            this.showStep(3);
             this.showProcessing(false);
             
         } catch (error) {
@@ -2250,133 +1235,41 @@ class InvoiceOCRProcessor {
         }
     }
     
-    async initializeWorker(language) {
-        const settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-        const confidence = settings.confidence || 70;
-        
-        await this.worker.initialize(language);
-        await this.worker.setParameters({
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789$៛€¥.,-+%កខគឃងចឆជឈញដឋឌឍណតថទធនបផពភមយរលវឝឞសហឡអឣឤឥឦឧឨឩឪឫឬឭឮឯឰឱឲឳ ',
-            preserve_interword_spaces: '1',
-            tessedit_pageseg_mode: '6', // Assume a single uniform block of text
-            tessedit_ocr_engine_mode: '3', // Default + LSTM
-        });
-    }
-    
     parseItemsFromText(text) {
         const items = [];
         const lines = text.split('\n').filter(line => line.trim());
         
-        // Load parsing patterns from settings
-        const settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-        const pricePatterns = (settings.pricePatterns || 'USD\\s*(\\d+\\.?\\d*)|\\$\\s*(\\d+\\.?\\d*)|៛\\s*(\\d+\\.?\\d*)').split('|');
-        const quantityPatterns = (settings.quantityPatterns || 'QTY\\s*(\\d+)|Quantity\\s*(\\d+)|ចំនួន\\s*(\\d+)|បរិមាណ\\s*(\\d+)').split('|');
-        
-        // Try to detect items using multiple strategies
-        lines.forEach((line, index) => {
-            // Strategy 1: Look for price patterns
-            let price = null;
-            let quantity = 1;
-            let itemName = '';
-            
-            // Extract price
-            for (const pattern of pricePatterns) {
-                const regex = new RegExp(pattern, 'i');
-                const match = line.match(regex);
-                if (match) {
-                    price = parseFloat(match[1] || match[2] || match[3] || 0);
-                    // Remove price from line to get item name
-                    itemName = line.replace(regex, '').trim();
-                    break;
-                }
-            }
-            
-            // Extract quantity
-            for (const pattern of quantityPatterns) {
-                const regex = new RegExp(pattern, 'i');
-                const match = line.match(regex);
-                if (match) {
-                    quantity = parseInt(match[1] || match[2] || match[3] || 1);
-                    break;
-                }
-            }
-            
-            // If no price found, check if line contains numbers (might be quantity or price)
-            if (!price) {
-                const numbers = line.match(/\d+\.?\d*/g);
-                if (numbers && numbers.length > 0) {
-                    // Last number might be price
-                    price = parseFloat(numbers[numbers.length - 1]);
-                    itemName = line.replace(numbers[numbers.length - 1], '').trim();
-                    
-                    // If more than one number, second last might be quantity
-                    if (numbers.length > 1) {
-                        quantity = parseInt(numbers[numbers.length - 2]);
-                    }
-                }
-            }
-            
-            // If we found a price, assume it's an item
-            if (price && itemName) {
+        lines.forEach(line => {
+            // Simple parsing: look for patterns like "Item Name 10 $5.00"
+            const match = line.match(/(.+?)\s+(\d+)\s+\$?(\d+\.?\d*)/);
+            if (match) {
                 items.push({
-                    name: this.cleanItemName(itemName),
-                    quantity: quantity,
-                    price: price,
-                    line: line,
+                    name: match[1].trim(),
+                    quantity: parseInt(match[2]) || 1,
+                    price: parseFloat(match[3]) || 0,
                     confidence: 'medium'
                 });
-            } else if (line.length > 3 && /[a-zA-Zក-ឰ]/.test(line)) {
-                // If line looks like text but no price, it might be item name
-                // Check next lines for price/quantity
-                if (index < lines.length - 1) {
-                    const nextLine = lines[index + 1];
-                    const nextNumbers = nextLine.match(/\d+\.?\d*/g);
-                    
-                    if (nextNumbers && nextNumbers.length > 0) {
-                        items.push({
-                            name: this.cleanItemName(line),
-                            quantity: nextNumbers.length > 1 ? parseInt(nextNumbers[0]) : 1,
-                            price: parseFloat(nextNumbers[nextNumbers.length - 1]),
-                            line: line + ' ' + nextLine,
-                            confidence: 'low'
-                        });
-                    }
-                }
+            } else if (line.length > 3) {
+                // If no price/quantity pattern, treat as item name
+                items.push({
+                    name: line.trim(),
+                    quantity: 1,
+                    price: 0,
+                    confidence: 'low'
+                });
             }
         });
         
-        // Filter out items with very short names (likely not real items)
         return items.filter(item => item.name.length > 2);
-    }
-    
-    cleanItemName(name) {
-        // Remove common non-item text
-        const commonWords = [
-            'invoice', 'bill', 'receipt', 'total', 'subtotal', 'tax', 'vat',
-            'វិក័យប័ត្រ', 'ប្រាក់', 'សរុប', 'ពន្ធ', 'តម្លៃ'
-        ];
-        
-        let cleaned = name;
-        commonWords.forEach(word => {
-            const regex = new RegExp(word, 'gi');
-            cleaned = cleaned.replace(regex, '');
-        });
-        
-        // Remove extra spaces and punctuation
-        cleaned = cleaned.replace(/[^\wក-ឰ\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        
-        return cleaned || name;
     }
     
     displayOCRResults() {
         const output = document.getElementById('ocr-output');
-        if (!output) return;
-        
         let html = '';
         
         this.ocrResults.forEach((result, index) => {
             html += `<div class="ocr-result">
-                <strong>តំបន់ ${index + 1} (ភាពជឿជាក់: ${result.confidence.toFixed(1)}%):</strong><br>
+                <strong>តំបន់ ${index + 1}:</strong><br>
                 <pre>${result.text}</pre>
                 <hr>
             </div>`;
@@ -2387,12 +1280,10 @@ class InvoiceOCRProcessor {
     
     displayParsedItems() {
         const container = document.getElementById('parsed-items-list');
-        if (!container) return;
-        
         container.innerHTML = '';
         
         if (this.parsedItems.length === 0) {
-            container.innerHTML = '<p>មិនមានទំនិញត្រូវបានស្វែងរក។ សូមត្រួតពិនិត្យលទ្ធផល OCR។</p>';
+            container.innerHTML = '<p>មិនមានទំនិញត្រូវបានស្វែងរក។</p>';
             return;
         }
         
@@ -2409,33 +1300,14 @@ class InvoiceOCRProcessor {
                     <button class="btn btn-small btn-success" onclick="ocrProcessor.addSingleItem(${index})">
                         <i class="fas fa-plus"></i>
                     </button>
-                    <button class="btn btn-small btn-warning" onclick="ocrProcessor.editParsedItem(${index})">
-                        <i class="fas fa-edit"></i>
-                    </button>
                 </div>
             `;
             container.appendChild(itemElement);
         });
-        
-        // Update stats
-        const itemsStats = document.getElementById('items-stats');
-        if (itemsStats) itemsStats.textContent = this.parsedItems.length;
-        
-        const wordsStats = document.getElementById('words-stats');
-        if (wordsStats) {
-            wordsStats.textContent = this.ocrResults.reduce((sum, result) => sum + result.text.split(/\s+/).length, 0);
-        }
     }
     
-    updateStats() {
-        const itemsStats = document.getElementById('items-stats');
-        if (itemsStats) itemsStats.textContent = this.parsedItems.length;
-    }
-    
-    async addSingleItem(index) {
+    addSingleItem(index) {
         const item = this.parsedItems[index];
-        
-        // Get target company
         const companySelect = document.getElementById('target-company');
         const company = companySelect.value;
         
@@ -2453,7 +1325,7 @@ class InvoiceOCRProcessor {
             price: item.price,
             date: new Date().toISOString().split('T')[0],
             category: '',
-            notes: `បានបន្ថែមពី OCR - ${item.confidence} confidence`,
+            notes: `បានបន្ថែមពី OCR`,
             addedDate: new Date().toISOString()
         };
         
@@ -2474,7 +1346,7 @@ class InvoiceOCRProcessor {
                 '<span style="color: green;"><i class="fas fa-check"></i> បានបន្ថែម</span>';
         }
         
-        alert(`ទំនិញ "${item.name}" ត្រូវបានបន្ថែមទៅក្នុងស្តុក!`);
+        alert(`ទំនិញ "${item.name}" ត្រូវបានបន្ថែម!`);
     }
     
     async addAllItemsToInventory() {
@@ -2495,53 +1367,38 @@ class InvoiceOCRProcessor {
             return;
         }
         
-        this.showProcessing(true, 'កំពុងបន្ថែមទំនិញទៅក្នុងស្តុក...');
+        this.showProcessing(true, 'កំពុងបន្ថែមទំនិញ...');
         
         try {
             let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
             let addedCount = 0;
             
-            // Add items in batches for better performance
-            const batchSize = 10;
-            for (let i = 0; i < this.parsedItems.length; i += batchSize) {
-                const batch = this.parsedItems.slice(i, i + batchSize);
+            this.parsedItems.forEach((item, index) => {
+                const inventoryItem = {
+                    id: Date.now() + index,
+                    company: company,
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: item.price,
+                    date: new Date().toISOString().split('T')[0],
+                    category: '',
+                    notes: `បានបន្ថែមពី OCR`,
+                    addedDate: new Date().toISOString()
+                };
                 
-                batch.forEach((item, batchIndex) => {
-                    const inventoryItem = {
-                        id: Date.now() + i + batchIndex,
-                        company: company,
-                        name: item.name,
-                        quantity: item.quantity,
-                        price: item.price,
-                        date: new Date().toISOString().split('T')[0],
-                        category: '',
-                        notes: `បានបន្ថែមពី OCR - ${item.confidence} confidence`,
-                        addedDate: new Date().toISOString()
-                    };
-                    
-                    inventory.push(inventoryItem);
-                    addedCount++;
-                });
-                
-                // Update progress
-                const progress = Math.round((i + batch.length) / this.parsedItems.length * 100);
-                this.showProcessing(true, `កំពុងបន្ថែម... ${progress}%`);
-                
-                // Small delay to keep UI responsive
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+                inventory.push(inventoryItem);
+                addedCount++;
+            });
             
-            // Save to localStorage
             localStorage.setItem('inventory', JSON.stringify(inventory));
             
-            // Update UI
             loadInventory();
             updateStats();
             
             this.showProcessing(false);
-            alert(`បានបន្ថែមទំនិញ ${addedCount} ទៅក្នុងស្តុកដោយជោគជ័យ!`);
+            alert(`បានបន្ថែមទំនិញ ${addedCount} ទៅក្នុងស្តុក!`);
             
-            // Reset parsed items display
+            // Mark all as added
             this.parsedItems.forEach((_, index) => {
                 const items = document.querySelectorAll('.parsed-item');
                 if (items[index]) {
@@ -2565,44 +1422,21 @@ class InvoiceOCRProcessor {
         }
         
         try {
-            // Get settings
-            const settings = JSON.parse(localStorage.getItem('settings') || {});
-            const currency = settings.currency || '$';
-            
             // Prepare data for Excel
             const excelData = [
-                ['ល.រ', 'ទំនិញ', 'ចំនួន', 'តម្លៃ', 'ក្រុមហ៊ុន', 'កំណត់ចំណាំ'],
+                ['ល.រ', 'ទំនិញ', 'ចំនួន', 'តម្លៃ', 'ក្រុមហ៊ុន'],
                 ...this.parsedItems.map((item, index) => [
                     index + 1,
                     item.name,
                     item.quantity,
-                    this.formatPrice(item.price, currency),
-                    document.getElementById('target-company').value || 'N/A',
-                    `បានបន្ថែមពី OCR - ${item.confidence} confidence`
+                    `$${item.price.toFixed(2)}`,
+                    document.getElementById('target-company').value || 'N/A'
                 ])
             ];
-            
-            // Add summary
-            const totalQuantity = this.parsedItems.reduce((sum, item) => sum + item.quantity, 0);
-            const totalValue = this.parsedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            
-            excelData.push(['']); // Empty row
-            excelData.push(['សរុប:', '', totalQuantity, this.formatPrice(totalValue, currency), '', '']);
             
             // Create workbook
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(excelData);
-            
-            // Set column widths
-            const wscols = [
-                {wch: 5},   // No.
-                {wch: 30},  // Item name
-                {wch: 10},  // Quantity
-                {wch: 12},  // Price
-                {wch: 20},  // Company
-                {wch: 25}   // Notes
-            ];
-            ws['!cols'] = wscols;
             
             // Add worksheet to workbook
             XLSX.utils.book_append_sheet(wb, ws, 'ទំនិញពី OCR');
@@ -2614,7 +1448,7 @@ class InvoiceOCRProcessor {
             // Save file
             XLSX.writeFile(wb, filename);
             
-            alert('ទិន្នន័យត្រូវបាននាំចេញទៅ Excel ដោយជោគជ័យ!');
+            alert('ទិន្នន័យត្រូវបាននាំចេញទៅ Excel!');
             
         } catch (error) {
             console.error('Export error:', error);
@@ -2622,332 +1456,83 @@ class InvoiceOCRProcessor {
         }
     }
     
-    formatPrice(price, currency) {
-        switch(currency) {
-            case '$': return `$${price.toFixed(2)}`;
-            case '៛': return `${price.toFixed(2)}៛`;
-            case '€': return `€${price.toFixed(2)}`;
-            case '¥': return `¥${price.toFixed(2)}`;
-            default: return `$${price.toFixed(2)}`;
-        }
-    }
-    
-    editParsedItem(index) {
-        const item = this.parsedItems[index];
-        
-        // Create edit form
-        const form = document.createElement('div');
-        form.innerHTML = `
-            <div class="form-group">
-                <label>ឈ្មោះទំនិញ:</label>
-                <input type="text" id="edit-item-name" value="${item.name}" class="form-control">
-            </div>
-            <div class="form-group">
-                <label>ចំនួន:</label>
-                <input type="number" id="edit-item-quantity" value="${item.quantity}" class="form-control">
-            </div>
-            <div class="form-group">
-                <label>តម្លៃ:</label>
-                <input type="number" id="edit-item-price" value="${item.price}" step="0.01" class="form-control">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="ocrProcessor.saveEditedItem(${index})">
-                    <i class="fas fa-save"></i> រក្សាទុក
-                </button>
-                <button class="btn btn-secondary" onclick="this.closest('.modal').classList.remove('active')">
-                    <i class="fas fa-times"></i> បោះបង់
-                </button>
-            </div>
-        `;
-        
-        // Show modal
-        const modal = document.getElementById('invoice-preview-modal');
-        const content = document.getElementById('invoice-preview-content');
-        if (!modal || !content) return;
-        
-        content.innerHTML = '';
-        content.appendChild(form);
-        
-        const title = modal.querySelector('h3');
-        title.innerHTML = '<i class="fas fa-edit"></i> កែប្រែទំនិញ';
-        
-        modal.classList.add('active');
-    }
-    
-    saveEditedItem(index) {
-        const name = document.getElementById('edit-item-name').value;
-        const quantity = parseInt(document.getElementById('edit-item-quantity').value);
-        const price = parseFloat(document.getElementById('edit-item-price').value);
-        
-        if (!name || isNaN(quantity) || isNaN(price)) {
-            alert('សូមបំពេញព័ត៌មានទាំងអស់!');
-            return;
-        }
-        
-        // Update item
-        this.parsedItems[index] = {
-            ...this.parsedItems[index],
-            name: name,
-            quantity: quantity,
-            price: price
-        };
-        
-        // Update display
-        this.displayParsedItems();
-        
-        // Close modal
-        document.getElementById('invoice-preview-modal').classList.remove('active');
-        
-        alert('ទំនិញត្រូវបានកែប្រែដោយជោគជ័យ!');
-    }
-    
     resetOCRProcess() {
-        if (confirm('តើអ្នកពិតជាចង់ចាប់ផ្ដើមឡើងវិញមែនឬទេ? ទិន្នន័យបច្ចុប្បន្ននឹងត្រូវបាត់បង់។')) {
-            // Clear canvas
-            if (this.ctx) {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            }
-            
-            // Reset variables
+        if (confirm('តើអ្នកពិតជាចង់ចាប់ផ្ដើមឡើងវិញមែនឬទេ?')) {
             this.currentImage = null;
             this.selectedAreas = [];
             this.ocrResults = [];
             this.parsedItems = [];
-            this.isSelecting = false;
             
-            // Clear displays
-            const ocrOutput = document.getElementById('ocr-output');
-            if (ocrOutput) ocrOutput.innerHTML = '';
+            document.getElementById('image-preview').innerHTML = `
+                <div class="preview-placeholder">
+                    <i class="fas fa-image"></i>
+                    <p>រូបភាពនឹងបង្ហាញនៅទីនេះ</p>
+                </div>
+            `;
             
-            const parsedItemsList = document.getElementById('parsed-items-list');
-            if (parsedItemsList) parsedItemsList.innerHTML = '';
+            document.getElementById('ocr-output').innerHTML = '';
+            document.getElementById('parsed-items-list').innerHTML = '';
+            document.getElementById('selected-areas').innerHTML = '';
+            document.getElementById('invoice-upload').value = '';
             
-            const selectedAreas = document.getElementById('selected-areas');
-            if (selectedAreas) selectedAreas.innerHTML = '';
-            
-            const imagePreview = document.getElementById('image-preview');
-            if (imagePreview) {
-                imagePreview.innerHTML = `
-                    <div class="preview-placeholder">
-                        <i class="fas fa-image"></i>
-                        <p>រូបភាពនឹងបង្ហាញនៅទីនេះ</p>
-                    </div>
-                `;
-                // Recreate canvas
-                this.createCanvas();
-            }
-            
-            // Reset stats
-            const imageStats = document.getElementById('image-stats');
-            if (imageStats) imageStats.textContent = 'មិនទាន់មាន';
-            
-            const wordsStats = document.getElementById('words-stats');
-            if (wordsStats) wordsStats.textContent = '0';
-            
-            const itemsStats = document.getElementById('items-stats');
-            if (itemsStats) itemsStats.textContent = '0';
-            
-            // Go back to first step
-            this.showStep(0);
-            
-            // Reset file input
-            const invoiceUpload = document.getElementById('invoice-upload');
-            if (invoiceUpload) invoiceUpload.value = '';
+            this.showStep(1);
         }
     }
     
     showProcessing(show, message = 'កំពុងដំណើរការ...') {
-        let processingDiv = document.getElementById('ocr-processing');
+        // Create or get processing overlay
+        let overlay = document.getElementById('ocr-processing-overlay');
         
-        if (!processingDiv) {
-            processingDiv = document.createElement('div');
-            processingDiv.id = 'ocr-processing';
-            processingDiv.className = 'ocr-processing';
-            processingDiv.innerHTML = `
-                <div class="spinner"></div>
-                <div class="processing-text">${message}</div>
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'ocr-processing-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(255,255,255,0.9);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+                display: none;
             `;
-            document.body.appendChild(processingDiv);
+            
+            overlay.innerHTML = `
+                <div class="spinner" style="
+                    width: 50px;
+                    height: 50px;
+                    border: 5px solid #f3f3f3;
+                    border-top: 5px solid #3498db;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <div class="message" style="margin-top: 20px; font-size: 16px; color: #333;"></div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Add spin animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
         }
         
-        processingDiv.querySelector('.processing-text').textContent = message;
-        processingDiv.classList.toggle('active', show);
-        this.isProcessing = show;
-    }
-    
-    loadOCRSettings() {
-        // Load saved settings or use defaults
-        let settings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-        
-        // Set defaults if not exists
-        if (!settings.confidence) settings.confidence = 70;
-        if (!settings.pricePatterns) settings.pricePatterns = 'USD\\s*(\\d+\\.?\\d*)|\\$\\s*(\\d+\\.?\\d*)|៛\\s*(\\d+\\.?\\d*)';
-        if (!settings.quantityPatterns) settings.quantityPatterns = 'QTY\\s*(\\d+)|Quantity\\s*(\\d+)|ចំនួន\\s*(\\d+)|បរិមាណ\\s*(\\d+)';
-        
-        localStorage.setItem('ocrSettings', JSON.stringify(settings));
-        
-        // Load company select
-        this.loadCompanySelect();
-    }
-    
-    loadCompanySelect() {
-        const companies = JSON.parse(localStorage.getItem('companies') || []);
-        const select = document.getElementById('target-company');
-        
-        if (!select) return;
-        
-        select.innerHTML = '<option value="">-- ជ្រើសរើសក្រុមហ៊ុន --</option>';
-        companies.forEach(company => {
-            const option = document.createElement('option');
-            option.value = company.name;
-            option.textContent = company.name;
-            select.appendChild(option);
-        });
-    }
-}
-
-// ==============================================
-// DATA OPTIMIZATION SYSTEM
-// ==============================================
-
-class DataOptimizer {
-    constructor() {
-        this.cache = new Map();
-        this.optimized = false;
-        console.log('DataOptimizer created');
-    }
-    
-    // Optimize inventory data for storage
-    optimizeInventoryData(inventory) {
-        console.time('Data optimization');
-        
-        const optimized = inventory.map(item => ({
-            i: item.id,           // id
-            c: item.company,      // company
-            n: item.name,         // name
-            q: item.quantity,     // quantity
-            p: Math.round(item.price * 100) / 100, // price (rounded to 2 decimal)
-            d: item.date,         // date
-            g: item.category || '', // category
-            o: item.notes || '',  // notes
-            a: item.addedDate     // addedDate
-        }));
-        
-        // Sort by ID for better compression
-        optimized.sort((a, b) => a.i - b.i);
-        
-        console.timeEnd('Data optimization');
-        console.log(`Optimized ${inventory.length} items`);
-        
-        return optimized;
-    }
-    
-    // Decompress optimized data
-    decompressInventoryData(optimized) {
-        return optimized.map(item => ({
-            id: item.i,
-            company: item.c,
-            name: item.n,
-            quantity: item.q,
-            price: item.p,
-            date: item.d,
-            category: item.g || '',
-            notes: item.o || '',
-            addedDate: item.a
-        }));
-    }
-    
-    // Calculate storage size
-    calculateStorageSize() {
-        const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
-        const companies = JSON.parse(localStorage.getItem('companies') || '[]');
-        const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-        const ocrSettings = JSON.parse(localStorage.getItem('ocrSettings') || '{}');
-        
-        const totalSize = 
-            JSON.stringify(inventory).length +
-            JSON.stringify(companies).length +
-            JSON.stringify(settings).length +
-            JSON.stringify(ocrSettings).length;
-        
-        return {
-            bytes: totalSize,
-            kb: (totalSize / 1024).toFixed(2),
-            mb: (totalSize / (1024 * 1024)).toFixed(2),
-            items: inventory.length,
-            companies: companies.length
-        };
-    }
-    
-    // Auto-optimize if needed
-    autoOptimize() {
-        const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
-        const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-        
-        // Only optimize if we have many items and auto-optimize is enabled
-        if (inventory.length > 1000 && settings.autoOptimize !== false) {
-            console.log('Auto-optimizing data...');
-            const optimized = this.optimizeInventoryData(inventory);
-            localStorage.setItem('inventory_optimized', JSON.stringify(optimized));
-            localStorage.setItem('inventory_optimized_version', '2');
-            
-            // Keep original for compatibility
-            localStorage.setItem('inventory', JSON.stringify(inventory));
-            
-            console.log('Data auto-optimized');
-            return true;
+        if (show) {
+            overlay.querySelector('.message').textContent = message;
+            overlay.style.display = 'flex';
+            this.isProcessing = true;
+        } else {
+            overlay.style.display = 'none';
+            this.isProcessing = false;
         }
-        return false;
-    }
-    
-    // Batch processing for large imports
-    processInBatches(items, processFn, batchSize = 100) {
-        const results = [];
-        const totalBatches = Math.ceil(items.length / batchSize);
-        
-        for (let i = 0; i < totalBatches; i++) {
-            const start = i * batchSize;
-            const end = Math.min(start + batchSize, items.length);
-            const batch = items.slice(start, end);
-            
-            const batchResults = processFn(batch, i, totalBatches);
-            results.push(...batchResults);
-            
-            // Update progress
-            const progress = Math.round(((i + 1) / totalBatches) * 100);
-            console.log(`Processing batch ${i + 1}/${totalBatches} (${progress}%)`);
-        }
-        
-        return results;
-    }
-    
-    // Clean old data
-    cleanOldData(days = 365) {
-        const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        
-        const oldItems = inventory.filter(item => {
-            const itemDate = new Date(item.date);
-            return itemDate < cutoffDate;
-        });
-        
-        const newItems = inventory.filter(item => {
-            const itemDate = new Date(item.date);
-            return itemDate >= cutoffDate;
-        });
-        
-        if (oldItems.length > 0) {
-            localStorage.setItem('inventory', JSON.stringify(newItems));
-            localStorage.setItem('inventory_archive', JSON.stringify(oldItems));
-            
-            return {
-                removed: oldItems.length,
-                remaining: newItems.length,
-                archiveSize: JSON.stringify(oldItems).length
-            };
-        }
-        
-        return null;
     }
 }
