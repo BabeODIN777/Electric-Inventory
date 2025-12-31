@@ -2701,3 +2701,31 @@ window.dualOCR.addItemToInventory = function(index) {
     
     alert(`ទំនិញ "${item.name}" ត្រូវបានបន្ថែម!`);
 };
+
+// Add this function anywhere in your script.js
+function handlePreviewOCR() {
+    // Check OCR mode
+    const simpleRadio = document.querySelector('input[name="ocr-mode"][value="simple"]');
+    const smartRadio = document.querySelector('input[name="ocr-mode"][value="smart"]');
+    
+    if (simpleRadio && simpleRadio.checked) {
+        // Simple OCR mode
+        if (window.ocrProcessor && typeof window.ocrProcessor.previewOCRResults === 'function') {
+            window.ocrProcessor.previewOCRResults();
+        } else {
+            alert('សូមផ្ទុករូបភាពមុន!');
+        }
+    } else if (smartRadio && smartRadio.checked) {
+        // Smart OCR mode
+        if (window.smartOCR && typeof window.smartOCR.processSmartOCR === 'function') {
+            window.smartOCR.processSmartOCR();
+        } else {
+            alert('សូមជ្រើសរើសតារាងមុនពេលប្រើ OCR ឆ្លាត!');
+        }
+    } else {
+        // Default to simple OCR
+        if (window.ocrProcessor && typeof window.ocrProcessor.previewOCRResults === 'function') {
+            window.ocrProcessor.previewOCRResults();
+        }
+    }
+}
