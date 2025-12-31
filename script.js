@@ -2069,9 +2069,24 @@ class InvoiceCreator {
     }
     
     exportAsImage() {
-        alert('To save as image, please use the print function and save as PDF/Image from print dialog.');
-        // For actual image export, you'd need html2canvas library
+    if (typeof html2canvas === 'undefined') {
+        alert('Please wait while loading image export library...');
+        return;
     }
+    
+    const preview = document.getElementById('invoice-print-content');
+    if (!preview) {
+        alert('សូមរក្សាទុកវិក័យប័ត្រមុន!');
+        return;
+    }
+    
+    html2canvas(preview).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `វិក័យប័ត្រ_${this.currentInvoice.number}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+    });
+}
     
     clearInvoice() {
         if (confirm('តើអ្នកពិតជាចង់ចាប់ផ្ដើមឡើងវិញមែនឬទេ?')) {
