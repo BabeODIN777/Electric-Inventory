@@ -29,6 +29,10 @@
             <button class="tab-btn" data-tab="settings">
                 <i class="fas fa-cog"></i> ការកំណត់
             </button>
+            <!-- Add this in the tabs navigation (around line 38-45 in index.html) -->
+<button class="tab-btn" data-tab="create-invoice">
+    <i class="fas fa-file-invoice-dollar"></i> បង្កើតវិក័យប័ត្រ
+</button>
         </nav>
 
         <main class="tab-content">
@@ -322,6 +326,87 @@
                     </div>
                 </div>
             </section>
+            <!-- Add this AFTER the settings section but BEFORE closing </main> -->
+<section id="create-invoice" class="tab-pane">
+    <h2><i class="fas fa-file-invoice-dollar"></i> បង្កើតវិក័យប័ត្រ</h2>
+    
+    <div class="invoice-controls">
+        <div class="form-group">
+            <label><i class="fas fa-user"></i> អតិថិជន:</label>
+            <input type="text" id="invoice-customer" placeholder="ឈ្មោះអតិថិជន..." class="form-control">
+        </div>
+        <div class="form-group">
+            <label><i class="fas fa-phone"></i> លេខទូរស័ព្ទ:</label>
+            <input type="tel" id="invoice-phone" placeholder="លេខទូរស័ព្ទ..." class="form-control">
+        </div>
+        <div class="form-group">
+            <label><i class="fas fa-calendar"></i> កាលបរិច្ឆេទ:</label>
+            <input type="date" id="invoice-date" class="form-control">
+        </div>
+        <div class="form-group">
+            <label><i class="fas fa-hashtag"></i> លេខវិក័យប័ត្រ:</label>
+            <input type="text" id="invoice-number" placeholder="INV-001" class="form-control" value="INV-">
+        </div>
+    </div>
+    
+    <div class="invoice-items-table">
+        <h3><i class="fas fa-list"></i> ទំនិញក្នុងវិក័យប័ត្រ</h3>
+        
+        <div class="table-responsive">
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th>លរ</th>
+                        <th>កូដទំនិញ</th>
+                        <th>ពណ៌នា</th>
+                        <th>ចំនួន</th>
+                        <th>ខ្នាត</th>
+                        <th>តម្លៃ</th>
+                        <th>សរុប</th>
+                        <th>សកម្មភាព</th>
+                    </tr>
+                </thead>
+                <tbody id="invoice-items-body">
+                    <!-- Items will be added here -->
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5"></td>
+                        <td><strong>សរុប:</strong></td>
+                        <td id="invoice-total">$0.00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <button class="btn btn-success" id="add-invoice-item">
+            <i class="fas fa-plus"></i> បន្ថែមទំនិញ
+        </button>
+    </div>
+    
+    <div class="invoice-actions">
+        <button class="btn btn-primary" id="save-invoice">
+            <i class="fas fa-save"></i> រក្សាទុកវិក័យប័ត្រ
+        </button>
+        <button class="btn btn-info" id="print-invoice">
+            <i class="fas fa-print"></i> បោះពុម្ព
+        </button>
+        <button class="btn btn-success" id="export-invoice-excel">
+            <i class="fas fa-file-excel"></i> នាំចេញ Excel
+        </button>
+        <button class="btn btn-warning" id="export-invoice-image">
+            <i class="fas fa-image"></i> រក្សាទុកជារូបភាព
+        </button>
+        <button class="btn btn-secondary" id="clear-invoice">
+            <i class="fas fa-redo"></i> ចាប់ផ្ដើមឡើងវិញ
+        </button>
+    </div>
+    
+    <div class="invoice-preview" id="invoice-preview">
+        <!-- Invoice preview will be displayed here -->
+    </div>
+</section>
         </main>
 
         <footer>
